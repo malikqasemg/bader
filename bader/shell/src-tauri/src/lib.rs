@@ -15,6 +15,7 @@ mod pipe;
 mod secrets;
 mod settings;
 mod tray;
+mod voice;
 #[cfg(windows)]
 mod win_user;
 
@@ -268,6 +269,40 @@ async fn chat_send(
 }
 
 #[tauri::command]
+fn voice_start(rec: State<voice::Recorder>) -> Result<(), String> {
+    voice::start(&rec)
+}
+
+#[tauri::command]
+fn voice_cancel(rec: State<voice::Recorder>) {
+    voice::cancel(&rec);
+}
+
+#[tauri::command]
+async fn voice_stop(app: AppHandle) -> Result<voice::Heard, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let rec = app.state::<voice::Recorder>();
+        voice::stop_and_transcribe(&app, &rec)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+async fn capture_screen() -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(voice::capture_screen)
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+async fn voice_speak(app: AppHandle, text: String) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || voice::speak(&app, &text))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
 async fn engine_status() -> engine::EngineStatus {
     engine::status().await
 }
@@ -417,6 +452,7 @@ pub fn run() {
         })
         .manage(Pending::default())
         .manage(Chat::default())
+        .manage(voice::Recorder::default())
         .invoke_handler(tauri::generate_handler![
             boot,
             save_settings,
@@ -437,6 +473,11 @@ pub fn run() {
             chat_send,
             chat_reset,
             engine_status,
+            voice_start,
+            voice_stop,
+            voice_cancel,
+            voice_speak,
+            capture_screen,
             engine_apply,
             ingest_file,
             secret_present,

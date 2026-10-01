@@ -18,6 +18,15 @@ Durations are estimates.
 - [x] macOS build of the shell (DMG) for testing
 - [x] Settings: AI (provider, key, model) and Voice (Arabic + English STT, voice, spoken replies) → engine profile
 - [x] Connector pills: Outlook, Webex, Gmail
+- [x] Island mic: talk in Arabic/English (engine STT, auto language), spoken replies (engine TTS)
+- [x] Look: attach a screenshot of the screen to a question (macOS)
+
+## Phase 3b — Screen buddy (ideas from Clicky, MIT: farzaa/clicky, openclicky, clicky_windows)
+- [ ] Push-to-talk hotkey (no need to open the island)
+- [ ] Point at things: cursor overlay flies to the button Bader talks about
+- [ ] Proactive suggestions: notice repeated work and offer to do it (ask first)
+- [ ] Look on Windows (screen capture)
+
 - [ ] Settings + wizard in Arabic (RTL); Bader tray icon (head) instead of app icon
 
 ## Phase 2 — Licence (week 2)
@@ -41,6 +50,8 @@ Durations are estimates.
 - [ ] Auto-update channel from GitHub releases
 
 ## Blockers / inputs needed
+- Microsoft Entra app registration (client ID) for Outlook sign-in
+- Google Cloud OAuth client (google_client_secret.json) for Gmail sign-in
 - Bader logo and colours
 - Microsoft Entra app registration + Webex integration (iNetGenius-owned, multi-tenant)
 - Windows code-signing certificate

@@ -15,10 +15,10 @@ function bubble(message: ChatMessage): HTMLElement {
     return h(
       "div",
       { class: "chat-row user" },
-      h("div", { class: "bubble", text: message.content }),
+      h("div", { class: "bubble", text: message.content, dir: "auto" }),
     );
   }
-  return h("div", { class: "chat-row" }, h("div", { class: "reply", text: message.content }));
+  return h("div", { class: "chat-row" }, h("div", { class: "reply", text: message.content, dir: "auto" }));
 }
 
 function typingDots(): HTMLElement {
@@ -44,9 +44,12 @@ export function buildPrompt(onHeightChange: () => void): ViewHost {
     class: "chat-input",
     placeholder: "Ask me anything…",
     spellcheck: "false",
+    dir: "auto",
   }) as HTMLInputElement;
   const send = h("button", { class: "send-btn", title: "Send" }, svg(ICONS.arrowUp, 11));
-  const bar = h("div", { class: "chat-bar" }, input, send);
+  const mic = h("button", { class: "mic-btn", title: "Talk to Bader · تحدث مع بدر" }, svg(ICONS.mic, 13));
+  const look = h("button", { class: "mic-btn", title: "Look at my screen · انظر إلى شاشتي" }, svg(ICONS.eye, 13));
+  const bar = h("div", { class: "chat-bar" }, input, look, mic, send);
 
   const el = h(
     "div",
@@ -58,7 +61,80 @@ export function buildPrompt(onHeightChange: () => void): ViewHost {
   let sending = false;
   let renderedCount = -1;
 
-  async function submit() {
+  // ── Voice: tap mic to talk, tap again to send. Replies are spoken back. ──
+  let recording = false;
+  let listening = false; // transcribing
+  let speakReplies = true;
+  let player: HTMLAudioElement | null = null;
+  void Bridge.engineStatus().then((s) => {
+    // The Voice setting "Spoken replies" decides; mic use always gets a spoken reply.
+    if (s) speakReplies = (s.values["voice.auto_tts"] ?? "").toLowerCase() === "true";
+  });
+
+  function setMic() {
+    mic.classList.toggle("recording", recording);
+    mic.classList.toggle("busy", listening);
+    clear(mic);
+    mic.append(svg(recording ? ICONS.stop : ICONS.mic, recording ? 10 : 13));
+  }
+
+  async function speak(text: string) {
+    try {
+      const url = await Bridge.voiceSpeak(text);
+      player?.pause();
+      player = new Audio(url);
+      void player.play();
+    } catch (err) {
+      console.error("[bader] speak failed", err);
+    }
+  }
+
+  async function toggleMic() {
+    if (sending || listening) return;
+    if (!recording) {
+      try {
+        player?.pause();
+        await Bridge.voiceStart();
+        recording = true;
+        input.placeholder = "Listening… tap ■ to send · أستمع…";
+      } catch (err) {
+        State.noteMessage = String(err).replace(/^Error:\s*/, "");
+        State.view = "note";
+        State.notify();
+      }
+      setMic();
+      return;
+    }
+    recording = false;
+    listening = true;
+    input.placeholder = "Understanding… · جارٍ الفهم…";
+    setMic();
+    try {
+      const heard = await Bridge.voiceStop();
+      listening = false;
+      setMic();
+      if (heard.text) {
+        input.value = heard.text;
+        await submit(true);
+      }
+    } catch (err) {
+      listening = false;
+      setMic();
+      State.noteMessage = String(err).replace(/^Error:\s*/, "");
+      State.view = "note";
+      State.notify();
+    }
+  }
+  mic.addEventListener("click", () => void toggleMic());
+
+  // ── Look: the next question carries a screenshot of the screen. ──
+  let looking = false;
+  look.addEventListener("click", () => {
+    looking = !looking;
+    look.classList.toggle("look-on", looking);
+  });
+
+  async function submit(byVoice = false) {
     const query = input.value.trim();
     if (!query || sending) return;
     input.value = "";
@@ -71,14 +147,24 @@ export function buildPrompt(onHeightChange: () => void): ViewHost {
     onHeightChange();
 
     const file = State.droppedFile;
-    const context: ChatContext | null =
+    let context: ChatContext | null =
       State.chatHistory.length === 1 && file ? { kind: "file", name: file.name, path: file.path } : null;
+    if (looking) {
+      try {
+        context = { kind: "screen", path: await Bridge.captureScreen() };
+      } catch (err) {
+        State.noteMessage = String(err).replace(/^Error:\s*/, "");
+      }
+      looking = false;
+      look.classList.remove("look-on");
+    }
 
     try {
       const reply = await Bridge.chatSend(query, context);
       State.chatHistory.push({ id: nextId++, role: "assistant", content: reply.text });
       State.stateOverride = null;
       Sound.play("finish");
+      if (byVoice || speakReplies) void speak(reply.text);
     } catch (err) {
       State.stateOverride = null;
       State.noteMessage = String(err).replace(/^Error:\s*/, "");
@@ -122,7 +208,9 @@ export function buildPrompt(onHeightChange: () => void): ViewHost {
         log.scrollTop = log.scrollHeight;
       }
 
-      input.placeholder = State.chatHistory.length === 0 ? "Ask me anything…" : "Continue…";
+      if (!recording && !listening) {
+        input.placeholder = State.chatHistory.length === 0 ? "Ask me anything… · اسألني أي شيء…" : "Continue… · تابع…";
+      }
       input.disabled = sending;
     },
     focus() {

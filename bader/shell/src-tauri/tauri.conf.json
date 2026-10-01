@@ -12,8 +12,8 @@
   "app": {
     "withGlobalTauri": false,
     "security": {
-      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self' ipc: http://ipc.localhost",
-      "devCsp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self' ipc: http://ipc.localhost ws://localhost:1420 http://localhost:1420"
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: data:; connect-src 'self' ipc: http://ipc.localhost",
+      "devCsp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: data:; connect-src 'self' ipc: http://ipc.localhost ws://localhost:1420 http://localhost:1420"
     },
     "windows": [
       {
@@ -52,7 +52,8 @@
       "icons/icon.ico"
     ],
     "resources": {
-      "../target/release/bader-hook.exe": "bader-hook.exe"
+      "../target/release/bader-hook.exe": "bader-hook.exe",
+      "resources/bader_voice.py": "bader_voice.py"
     },
     "copyright": "© iNetGenius",
     "category": "Productivity",
@@ -67,6 +68,7 @@
         ],
         "installerHooks": "nsis/hooks.nsh"
       }
-    }
+    },
+    "macOS": {}
   }
 }

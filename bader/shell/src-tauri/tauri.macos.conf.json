@@ -9,7 +9,9 @@
       "app",
       "dmg"
     ],
-    "resources": null,
+    "resources": {
+      "../target/release/bader-hook.exe": null
+    },
     "macOS": {
       "minimumSystemVersion": "12.0"
     }

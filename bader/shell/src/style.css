@@ -891,6 +891,44 @@ input[type="range"]::-webkit-slider-thumb {
   transform: scale(0.94);
 }
 
+.mic-btn {
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--ink);
+  display: grid;
+  place-items: center;
+  cursor: default;
+  transition: transform 0.08s ease-out, background 0.15s ease-out;
+}
+
+.mic-btn:active {
+  transform: scale(0.94);
+}
+
+.mic-btn.recording {
+  background: #f4505e;
+  color: #fff;
+  animation: mic-pulse 1.2s ease-in-out infinite;
+}
+
+.mic-btn.look-on {
+  background: #07c1e4;
+  color: #0b0c0e;
+}
+
+.mic-btn.busy {
+  opacity: 0.5;
+}
+
+@keyframes mic-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(244, 80, 94, 0.55); }
+  50% { box-shadow: 0 0 0 6px rgba(244, 80, 94, 0); }
+}
+
 /* ── Drop zone ──────────────────────────────────────────────────────────── */
 
 .drop-card {

@@ -194,6 +194,8 @@ export function voiceSection(status: EngineStatus): HTMLElement {
     const values: Record<string, string> = {
       "stt.enabled": "true",
       "stt.provider": stt.value,
+      // Empty = detect Arabic or English for each message.
+      "stt.language": "",
       "tts.provider": "edge",
       "tts.edge.voice": voice.value,
       "voice.auto_tts": spoken.checked ? "true" : "false",

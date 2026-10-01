@@ -58,6 +58,8 @@ impl Chat {
 pub enum ChatContext {
     File { name: String, path: String },
     Window { app_name: String, title: String, url: Option<String> },
+    /// A screenshot of the user's screen, attached to this one question.
+    Screen { path: String },
 }
 
 #[derive(Serialize)]
@@ -77,6 +79,13 @@ pub async fn send(
     let key = secrets::get("bader-engine-key").unwrap_or_default();
 
     let mut content: Vec<Value> = Vec::new();
+    // A screenshot rides along with the question it was taken for.
+    if let Some(ChatContext::Screen { path }) = &context {
+        if let Some(block) = file_block(path) {
+            content.push(block);
+        }
+        content.push(json!({ "type": "text", "text": "This is a screenshot of my screen right now." }));
+    }
     // File / window context rides along with the first message only.
     if chat.is_empty() {
         match &context {
@@ -93,7 +102,7 @@ pub async fn send(
                 }
                 content.push(json!({ "type": "text", "text": text }));
             }
-            None => {}
+            Some(ChatContext::Screen { .. }) | None => {}
         }
     }
     content.push(json!({ "type": "text", "text": query }));

@@ -100,6 +100,16 @@ export const Bridge = {
   secretSet: (key: string, value: string) => callOrThrow<void>("secret_set", { key, value }),
   secretClear: (key: string) => callOrThrow<void>("secret_clear", { key }),
 
+  // ── Voice (mic in the island) ─────────────────────────────────────────────
+  voiceStart: () => callOrThrow<void>("voice_start"),
+  /** Stops the mic and returns what was said (Arabic or English). */
+  voiceStop: () => callOrThrow<{ text: string; language: string }>("voice_stop"),
+  voiceCancel: () => call<void>("voice_cancel"),
+  /** Bader's spoken reply as a data URL. */
+  voiceSpeak: (text: string) => callOrThrow<string>("voice_speak", { text }),
+  /** Screenshot of the main display for one question; returns its path. */
+  captureScreen: () => callOrThrow<string>("capture_screen"),
+
   // ── Engine (AI + voice settings) ──────────────────────────────────────────
   engineStatus: () => call<EngineStatus>("engine_status"),
   /** Writes engine settings; keys go to the engine's .env, never back to the page. */
@@ -124,7 +134,8 @@ export interface IntegrationUpdate {
 
 export type ChatContext =
   | { kind: "file"; name: string; path: string }
-  | { kind: "window"; appName: string; title: string; url?: string };
+  | { kind: "window"; appName: string; title: string; url?: string }
+  | { kind: "screen"; path: string };
 
 export interface DroppedFile {
   name: string;

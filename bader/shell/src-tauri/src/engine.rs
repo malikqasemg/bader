@@ -23,6 +23,7 @@ const YAML_KEYS: &[&str] = &[
     "model.base_url",
     "stt.enabled",
     "stt.provider",
+    "stt.language",
     "stt.local.model",
     "stt.local.language",
     "tts.provider",
