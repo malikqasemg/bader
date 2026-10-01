@@ -33,9 +33,21 @@ for f in faces/*.raw; do python3 -m mpremote connect <port> cp $f :$f; done
 python3 -m mpremote connect <port> reset
 ```
 
-## Protocol (USB serial, 115200, one line per command)
-- `FACE <name> [seconds]` — show a face; after `seconds` return to neutral
-- `BL <0-100>` — backlight
-- `PING` → `PONG bader-face <version>` · `LIST` → available faces
+## Protocol v2 (USB serial, 115200)
+App → screen, one line per command:
+- `FACE <name> [seconds]` — show a face; after `seconds` back to idle
+- `STRIP <y> <h> [idle]` + `172*h*2` raw RGB565 bytes — draw a full-width strip
+  (the island renders the text, so Arabic works); `idle` = keep it under idle poses
+- `LED <r> <g> <b> [pulse]` — RGB light (amber pulse = waiting for approval)
+- `PING` → `PONG bader-face 2.0` · `LIST` → faces on the board
 
-Note: while the Bader app is running it holds the USB port; quit it before using mpremote.
+Screen → app:
+- `BTN short` / `BTN long` — BOOT button. Approval pending: short = approve,
+  long (≥ 1 s) = deny. Otherwise short = start/stop talking to Bader.
+
+Idle: full-body Bader and the poses in `art/poses` rotate every 30 s, with
+"next meeting · unread mail" in the bottom strip (from the background sync).
+
+Note: this board has no touch panel. The touch version is the
+Waveshare ESP32-C6-Touch-LCD-1.47 (same screen + touch).
+Quit the Bader app before using mpremote (the app holds the USB port).

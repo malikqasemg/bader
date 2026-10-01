@@ -259,28 +259,35 @@ pub(crate) fn engine_python(root: &PathBuf) -> PathBuf {
     }
 }
 
-fn helper_script(app: &AppHandle) -> Option<PathBuf> {
+fn helper_script(app: &AppHandle, name: &str) -> Option<PathBuf> {
     let mut candidates = Vec::new();
     if let Ok(dir) = app.path().resource_dir() {
-        candidates.push(dir.join("bader_voice.py"));
-        candidates.push(dir.join("resources").join("bader_voice.py"));
+        candidates.push(dir.join(name));
+        candidates.push(dir.join("resources").join(name));
     }
     // Development builds: next to the sources.
-    candidates.push(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources").join("bader_voice.py"));
+    candidates.push(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources").join(name));
     candidates.into_iter().find(|p| p.is_file())
 }
 
 fn run_helper(app: &AppHandle, args: &[&str]) -> Result<Value, String> {
+    run_script(app, "bader_voice.py", args)
+}
+
+/// Runs one of Bader's helper scripts with the engine's Python; returns the
+/// JSON object it prints last.
+pub fn run_script(app: &AppHandle, name: &str, args: &[&str]) -> Result<Value, String> {
     let root = engine_root();
     let python = engine_python(&root);
     if !python.is_file() {
         return Err("Bader engine is not installed on this computer.".into());
     }
-    let script = helper_script(app).ok_or("Voice helper missing from the app.")?;
+    let script = helper_script(app, name).ok_or("Helper script missing from the app.")?;
     let mut cmd = Command::new(&python);
     cmd.arg(&script)
         .args(args)
         .current_dir(&root)
+        .env("PYTHONPATH", &root)
         .env("HERMES_HOME", crate::engine::home())
         .stdin(Stdio::null())
         .stderr(Stdio::null());

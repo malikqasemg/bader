@@ -33,7 +33,13 @@ const YAML_KEYS: &[&str] = &[
 ];
 
 /// Bader's own voice choices (Arabic + English), kept in bader_voice.json.
-const VOICE_KEYS: &[&str] = &["bader.voice_ar", "bader.voice_en"];
+const VOICE_KEYS: &[&str] = &[
+    "bader.voice_ar",
+    "bader.voice_en",
+    "bader.answer_lang",
+    "bader.summary_lang",
+    "bader.approvals",
+];
 
 /// .env keys the settings window may write.
 const ENV_KEYS: &[&str] = &[
@@ -182,6 +188,17 @@ pub async fn status() -> EngineStatus {
                     v.insert(k.to_string(), s.to_string());
                 }
             }
+            let prefs: Value = std::fs::read_to_string(dir.join("bader_prefs.json"))
+                .ok()
+                .and_then(|t| serde_json::from_str(&t).ok())
+                .unwrap_or(Value::Null);
+            for (k, j) in [("bader.answer_lang", "answer_lang"), ("bader.summary_lang", "summary_lang")] {
+                v.insert(k.to_string(), prefs.get(j).and_then(Value::as_str).unwrap_or("auto").to_string());
+            }
+            v.insert(
+                "bader.approvals".into(),
+                (prefs.get("approvals").and_then(Value::as_bool) != Some(false)).to_string(),
+            );
             v
         },
         keys,
@@ -199,6 +216,12 @@ pub fn apply(mut values: HashMap<String, String>, secrets: HashMap<String, Strin
         }
     }
     let dir = home();
+    let answer = values.remove("bader.answer_lang");
+    let summary = values.remove("bader.summary_lang");
+    let approvals = values.remove("bader.approvals");
+    if answer.is_some() || summary.is_some() || approvals.is_some() {
+        write_prefs(&dir, answer, summary, approvals)?;
+    }
     let ar = values.remove("bader.voice_ar");
     let en = values.remove("bader.voice_en");
     if ar.is_some() || en.is_some() {
@@ -255,6 +278,68 @@ pub fn apply(mut values: HashMap<String, String>, secrets: HashMap<String, Strin
     Ok(())
 }
 
+fn lang_word(v: &str) -> &'static str {
+    match v {
+        "en" => "en",
+        "ar" => "ar",
+        _ => "auto",
+    }
+}
+
+/// Saves language + approval preferences (bader_prefs.json) and mirrors them
+/// into the engine persona, so Telegram / WhatsApp follow them too.
+fn write_prefs(
+    dir: &std::path::Path,
+    answer: Option<String>,
+    summary: Option<String>,
+    approvals: Option<String>,
+) -> Result<(), String> {
+    let path = dir.join("bader_prefs.json");
+    let mut cur: Value = std::fs::read_to_string(&path)
+        .ok()
+        .and_then(|t| serde_json::from_str(&t).ok())
+        .unwrap_or_else(|| serde_json::json!({}));
+    if let Some(a) = answer {
+        cur["answer_lang"] = Value::String(lang_word(&a).into());
+    }
+    if let Some(s) = summary {
+        cur["summary_lang"] = Value::String(lang_word(&s).into());
+    }
+    if let Some(a) = approvals {
+        cur["approvals"] = Value::Bool(a != "false");
+    }
+    std::fs::write(&path, serde_json::to_string_pretty(&cur).unwrap_or_default())
+        .map_err(|e| format!("Could not save preferences: {e}"))?;
+
+    let answer_rule = match cur.get("answer_lang").and_then(Value::as_str).unwrap_or("auto") {
+        "en" => "- Always reply in English, even when the user writes in Arabic.",
+        "ar" => "- Always reply in Arabic (clear, formal), even when the user writes in English.",
+        _ => "- Reply in the language the user writes in.",
+    };
+    let summary_rule = match cur.get("summary_lang").and_then(Value::as_str).unwrap_or("auto") {
+        "en" => "- Meeting summaries, briefs and action items: always in English, whatever the meeting language.",
+        "ar" => "- Meeting summaries, briefs and action items: always in Arabic, whatever the meeting language.",
+        _ => "- Meeting summaries and action items: use the meeting's main language.",
+    };
+    let approval_rule = if cur.get("approvals").and_then(Value::as_bool) == Some(false) {
+        "- The user turned approvals off: do what they ask without asking first."
+    } else {
+        "- Sending, replying, forwarding or deleting mail, and creating or deleting calendar events need the user's approval. The system asks automatically; just run the action and wait."
+    };
+    let block = format!(
+        "<!-- bader:prefs -->\n## Language\n{answer_rule}\n{summary_rule}\n\n## Actions in the user's name\n{approval_rule}\n<!-- /bader:prefs -->"
+    );
+    let soul_path = dir.join("SOUL.md");
+    let soul = std::fs::read_to_string(&soul_path).unwrap_or_default();
+    let new = match (soul.find("<!-- bader:prefs -->"), soul.find("<!-- /bader:prefs -->")) {
+        (Some(a), Some(b)) if b > a => {
+            format!("{}{}{}", &soul[..a], block, &soul[b + "<!-- /bader:prefs -->".len()..])
+        }
+        _ => format!("{}\n\n{}\n", soul.trim_end(), block),
+    };
+    std::fs::write(&soul_path, new).map_err(|e| format!("Could not update the persona: {e}"))
+}
+
 /// Stops the engine (if running) and starts it again in the background.
 pub fn restart() -> Result<(), String> {
     let bin = hermes_bin().ok_or("Engine not found on this computer.")?;
@@ -276,7 +361,8 @@ pub fn restart() -> Result<(), String> {
     let log = std::fs::File::create(log_dir.join("engine.log")).map_err(|e| e.to_string())?;
     let err = log.try_clone().map_err(|e| e.to_string())?;
     Command::new(&bin)
-        .args(["-p", PROFILE, "gateway", "run"])
+        // --replace takes over from an engine that is still draining old work.
+        .args(["-p", PROFILE, "gateway", "run", "--replace"])
         .env("HERMES_ACCEPT_HOOKS", "1")
         // Tools the engine runs (mail, calendar) must see this profile's tokens.
         .env("HERMES_HOME", home())

@@ -3,7 +3,8 @@
 
 import { h, svg, clear } from "./dom";
 import { ICONS } from "./icons";
-import { Bridge, type ChatContext } from "../core/bridge";
+import { Bridge, onEvent, type ChatContext, type RunEvent, type SnapshotInfo } from "../core/bridge";
+import { idleLines, stripIdle, stripNow, toolLabel } from "./facescreen";
 import { Sound } from "../core/sound";
 import { State, type ChatMessage } from "../core/state";
 import type { ViewHost } from "./views";
@@ -18,15 +19,25 @@ function bubble(message: ChatMessage): HTMLElement {
       h("div", { class: "bubble", text: message.content, dir: "auto" }),
     );
   }
-  return h("div", { class: "chat-row" }, h("div", { class: "reply", text: message.content, dir: "auto" }));
+  return h("div", { class: "chat-row" }, h("div", { class: "reply", text: plain(message.content), dir: "auto" }));
 }
 
-function typingDots(): HTMLElement {
+function typingDots(status: string): HTMLElement {
   return h(
     "div",
     { class: "chat-row" },
     h("div", { class: "typing" }, h("i"), h("i"), h("i")),
+    status ? h("div", { class: "run-status", text: status, dir: "auto" }) : null,
   );
+}
+
+/** Replies are shown as plain text: drop markdown emphasis and headings. */
+function plain(text: string): string {
+  return text
+    .replace(/\*\*(.+?)\*\*/g, "$1")
+    .replace(/__(.+?)__/g, "$1")
+    .replace(/^#{1,6}\s+/gm, "")
+    .replace(/`([^`]+)`/g, "$1");
 }
 
 /** The coloured chip showing what the question is about (a dropped file). */
@@ -60,6 +71,88 @@ export function buildPrompt(onHeightChange: () => void): ViewHost {
 
   let sending = false;
   let renderedCount = -1;
+  let runStatus = "";
+  const approvalRow = h("div", { class: "approval-row" });
+  approvalRow.style.display = "none";
+  log.after(approvalRow);
+
+  // ── Live run events: what Bader is doing, and approvals ──
+  function showApproval(what: string) {
+    clear(approvalRow);
+    const yes = h("button", { class: "approve-btn", text: "Approve · موافق" }) as HTMLButtonElement;
+    const no = h("button", { class: "deny-btn", text: "Deny · رفض" }) as HTMLButtonElement;
+    const answer = async (choice: "once" | "deny") => {
+      yes.disabled = no.disabled = true;
+      try {
+        await Bridge.runApprove(choice);
+      } catch (err) {
+        console.error("[bader] approval failed", err);
+      }
+    };
+    yes.addEventListener("click", () => void answer("once"));
+    no.addEventListener("click", () => void answer("deny"));
+    approvalRow.append(
+      h("div", { class: "approval-text" },
+        h("b", { text: "Bader needs your OK · بدر يحتاج موافقتك" }),
+        h("span", { text: what, dir: "auto" }),
+        h("small", { text: "Or press the button on Bader's screen (hold = deny)" }),
+      ),
+      h("div", { class: "approval-actions" }, yes, no),
+    );
+    approvalRow.style.display = "";
+    onHeightChange();
+    void Bridge.face("approval");
+    stripNow([
+      { text: what, color: "#ffc440", size: 14 },
+      { text: "Press = Yes · Hold = No", color: "#96a0aa", size: 13 },
+    ]);
+    void Bridge.faceLed(255, 150, 0, true);
+    Sound.play("approval");
+  }
+
+  function hideApproval(choice?: string | null) {
+    if (approvalRow.style.display === "none") return;
+    approvalRow.style.display = "none";
+    clear(approvalRow);
+    onHeightChange();
+    void Bridge.faceLed(0, 0, 0);
+    if (choice === "deny") {
+      void Bridge.face("concerned", 3);
+      stripNow([{ text: "Cancelled · أُلغي", color: "#f4505e" }]);
+    } else if (choice) {
+      void Bridge.face("working");
+      stripNow([{ text: "Approved · تمت الموافقة", color: "#50dc78" }]);
+    }
+  }
+
+  void onEvent<RunEvent>("bader-run", (ev) => {
+    if (ev.kind === "tool") {
+      const label = toolLabel(ev.tool, ev.text);
+      runStatus = label.en;
+      void Bridge.face("working");
+      stripNow([
+        { text: label.en, color: "#ffc440", size: 15 },
+        { text: label.ar, color: "#ebeef2", size: 15 },
+      ]);
+      renderedCount = -1;
+      State.notify();
+    } else if (ev.kind === "approval") {
+      showApproval(ev.text ?? "An action needs your approval");
+    } else if (ev.kind === "approval-resolved") {
+      hideApproval(ev.text);
+    }
+  });
+
+  // ── Idle screen: next meeting + unread mail, refreshed by the background sync ──
+  const paintIdle = (info: SnapshotInfo | null) => stripIdle(idleLines(info));
+  void Bridge.snapshotInfo().then((i) => paintIdle(i ?? null));
+  void onEvent<SnapshotInfo>("bader-snapshot", (i) => paintIdle(i));
+  window.setInterval(() => void Bridge.snapshotInfo().then((i) => paintIdle(i ?? null)), 60_000);
+
+  // ── The button on Bader's screen: short press = talk to Bader ──
+  void onEvent<string>("face-button", (kind) => {
+    if (kind === "short") void toggleMic();
+  });
 
   // ── Voice: tap mic to talk, tap again to send. Replies are spoken back. ──
   let recording = false;
@@ -153,6 +246,7 @@ export function buildPrompt(onHeightChange: () => void): ViewHost {
     State.stateOverride = "thinking";
     State.notify();
     onHeightChange();
+    runStatus = "";
     void Bridge.face("thinking");
 
     const file = State.droppedFile;
@@ -173,10 +267,15 @@ export function buildPrompt(onHeightChange: () => void): ViewHost {
       State.chatHistory.push({ id: nextId++, role: "assistant", content: reply.text });
       State.stateOverride = null;
       Sound.play("finish");
-      if (byVoice || speakReplies) void speak(reply.text);
+      runStatus = "";
+      hideApproval(null);
+      if (byVoice || speakReplies) void speak(plain(reply.text));
       else void Bridge.face("happy", 3);
     } catch (err) {
+      runStatus = "";
+      hideApproval(null);
       void Bridge.face("concerned", 6);
+      stripNow([{ text: String(err).replace(/^Error:\s*/, "").slice(0, 60), color: "#f4505e", size: 13 }]);
       State.stateOverride = null;
       State.noteMessage = String(err).replace(/^Error:\s*/, "");
       State.view = "note";
@@ -215,7 +314,7 @@ export function buildPrompt(onHeightChange: () => void): ViewHost {
         renderedCount = count;
         clear(log);
         for (const m of State.chatHistory) log.append(bubble(m));
-        if (thinking) log.append(typingDots());
+        if (thinking) log.append(typingDots(runStatus));
         log.scrollTop = log.scrollHeight;
       }
 

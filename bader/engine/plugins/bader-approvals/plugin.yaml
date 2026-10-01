@@ -1,0 +1,6 @@
+name: bader-approvals
+version: "1.0.0"
+description: "Bader human-in-the-middle: asks the user to approve before sending, replying to or deleting mail, or creating/deleting calendar events. Approve from the Bader island, the face screen button, or Telegram/WhatsApp."
+author: "iNetGenius"
+provides_hooks:
+  - pre_tool_call

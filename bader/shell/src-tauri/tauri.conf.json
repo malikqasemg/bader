@@ -53,7 +53,8 @@
     ],
     "resources": {
       "../target/release/bader-hook.exe": "bader-hook.exe",
-      "resources/bader_voice.py": "bader_voice.py"
+      "resources/bader_voice.py": "bader_voice.py",
+      "resources/bader_sync.py": "bader_sync.py"
     },
     "copyright": "© iNetGenius",
     "category": "Productivity",

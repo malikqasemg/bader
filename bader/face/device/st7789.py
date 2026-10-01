@@ -68,3 +68,10 @@ class Display:
                     break
                 self.spi.write(mv[:n])
             self.cs(1)
+
+    def blit_buf(self, y, h, buf):
+        """Draws a full-width strip from an RGB565 buffer (172*h*2 bytes)."""
+        self.window(0, y, W - 1, y + h - 1)
+        self.cs(0); self.dc(1)
+        self.spi.write(buf)
+        self.cs(1)

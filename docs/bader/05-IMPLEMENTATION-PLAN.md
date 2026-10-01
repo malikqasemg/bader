@@ -21,6 +21,14 @@ Durations are estimates.
 - [x] Island mic: talk in Arabic/English (engine STT, auto language), spoken replies (engine TTS)
 - [x] Look: attach a screenshot of the screen to a question (macOS)
 
+## Phase 3d — Speed, skills, language, approvals (done 2026-10-01)
+- [x] Background sync (5 min) of Gmail + Calendar → bader_inbox.json; mail/calendar questions answered from it (~40 s → ~7–12 s)
+- [x] Chat via engine runs stream: live tool progress, approvals, final answer
+- [x] Skills: bader-meeting-brief (+ transcribe), docx/xlsx/powerpoint/pdf, web search (ddgs), browser, computer use, Agent-Reach
+- [x] Language: answers and meeting summaries Auto / English only / Arabic only
+- [x] Approvals plugin (bader-approvals): send/reply/delete mail, calendar changes → Approve/Deny in island, screen button, Telegram
+- [x] Screen v2: poses rotate when idle, next meeting + unread, live tool text, approval screen + amber light
+
 ## Phase 3c — Live face screen (done 2026-10-01)
 - [x] ESP32-C6-LCD-1.47 runs MicroPython + `bader/face/device`; 8 faces with English/Arabic labels
 - [x] App auto-finds the screen on USB and shows listening / thinking / speaking / done / problem

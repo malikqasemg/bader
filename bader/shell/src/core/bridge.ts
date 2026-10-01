@@ -21,8 +21,22 @@ async function call<T>(cmd: string, args?: Record<string, unknown>): Promise<T |
 }
 
 export type FaceName =
-  | "idle" | "neutral" | "listening" | "thinking" | "speaking"
+  | "idle" | "neutral" | "listening" | "working" | "approval" | "thinking" | "speaking"
   | "happy" | "concerned" | "surprised" | "celebrating";
+
+export interface SnapshotInfo {
+  unread: number;
+  mails: number;
+  nextTitle?: string | null;
+  nextStart?: string | null;
+  updated?: string | null;
+}
+
+export interface RunEvent {
+  kind: "tool" | "approval" | "approval-resolved" | "interim";
+  tool?: string | null;
+  text?: string | null;
+}
 
 export interface AccountsStatus {
   gmail: boolean;
@@ -123,6 +137,15 @@ export const Bridge = {
   // ── Face screen (ESP32 on USB) ────────────────────────────────────────────
   /** Shows a face on Bader's USB screen; with seconds, it returns to "idle". */
   face: (name: FaceName, seconds?: number) => call<void>("face_set", { name, seconds: seconds ?? null }),
+  /** Full-width RGB565 strip (base64) at y on the face screen; idle = keep under idle poses. */
+  faceStrip: (y: number, h: number, idle: boolean, data: string) => call<void>("face_strip", { y, h, idle, data }),
+  faceLed: (r: number, g: number, b: number, pulse = false) => call<void>("face_led", { r, g, b, pulse }),
+
+  // ── Runs: approvals, snapshot ─────────────────────────────────────────────
+  /** "once" approves what Bader is waiting on, "deny" refuses it. */
+  runApprove: (choice: "once" | "deny") => callOrThrow<boolean>("run_approve", { choice }),
+  snapshotInfo: () => call<SnapshotInfo>("snapshot_info"),
+  syncNow: () => call<SnapshotInfo>("sync_now"),
 
   // ── Voice (mic in the island) ─────────────────────────────────────────────
   voiceStart: () => callOrThrow<void>("voice_start"),

@@ -11,6 +11,8 @@ mod island;
 mod log;
 #[cfg(windows)]
 mod pipe;
+mod runs;
+mod sync;
 #[cfg(not(windows))]
 #[path = "pipe_stub.rs"]
 mod pipe;
@@ -261,18 +263,55 @@ fn approval_decline(app: AppHandle, request_id: String) {
 /// One chat turn. The API key and any file bytes stay on the Rust side.
 #[tauri::command]
 async fn chat_send(
+    app: AppHandle,
     shared: State<'_, Shared>,
     chat: State<'_, Chat>,
     query: String,
     context: Option<ChatContext>,
 ) -> Result<ChatReply, String> {
     let model = shared.settings.lock().unwrap().model.clone();
-    claude::send(&chat, &model, query, context).await
+    claude::send(&app, &chat, &model, query, context).await
 }
 
 #[tauri::command]
 fn face_set(face: State<face::Face>, name: String, seconds: Option<f32>) {
     face.set(&name, seconds);
+}
+
+/// A full-width text strip for the face screen, drawn by the island (RGB565, base64).
+#[tauri::command]
+fn face_strip(face: State<face::Face>, y: u16, h: u16, idle: bool, data: String) -> Result<(), String> {
+    use base64::Engine;
+    let bytes = base64::engine::general_purpose::STANDARD.decode(data).map_err(|e| e.to_string())?;
+    face.strip(y, h, idle, bytes)
+}
+
+#[tauri::command]
+fn face_led(face: State<face::Face>, r: u8, g: u8, b: u8, pulse: bool) {
+    face.led(r, g, b, pulse);
+}
+
+/// Approve ("once") or deny ("deny") what Bader is waiting on.
+#[tauri::command]
+async fn run_approve(app: AppHandle, choice: String) -> Result<bool, String> {
+    let key = secrets::get("bader-engine-key").unwrap_or_default();
+    runs::answer(&app, &claude::engine_url(), &key, &choice).await
+}
+
+#[tauri::command]
+async fn sync_now(app: AppHandle) -> Option<sync::SnapshotInfo> {
+    tauri::async_runtime::spawn_blocking(move || {
+        sync::run_once(&app);
+        sync::info()
+    })
+    .await
+    .ok()
+    .flatten()
+}
+
+#[tauri::command]
+fn snapshot_info() -> Option<sync::SnapshotInfo> {
+    sync::info()
 }
 
 #[tauri::command]
@@ -511,7 +550,6 @@ pub fn run() {
         .manage(Pending::default())
         .manage(Chat::default())
         .manage(voice::Recorder::default())
-        .manage(face::Face::start())
         .invoke_handler(tauri::generate_handler![
             boot,
             save_settings,
@@ -534,6 +572,11 @@ pub fn run() {
             engine_status,
             voice_start,
             face_set,
+            face_strip,
+            face_led,
+            run_approve,
+            sync_now,
+            snapshot_info,
             voice_stop,
             voice_cancel,
             voice_speak,
@@ -563,6 +606,8 @@ pub fn run() {
             #[cfg(target_os = "macos")]
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);
             tray::build(&handle)?;
+            app.manage(face::Face::start(handle.clone()));
+            sync::start(handle.clone());
             // Before the island: see create_settings_window.
             create_settings_window(&handle);
 

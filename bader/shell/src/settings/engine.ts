@@ -246,3 +246,52 @@ export function voiceSection(status: EngineStatus): HTMLElement {
     feedback,
   );
 }
+
+// ── Language & approvals ──────────────────────────────────────────────────────
+
+const LANGS: [string, string][] = [
+  ["auto", "Same as I write · نفس لغتي"],
+  ["en", "English only"],
+  ["ar", "العربية فقط · Arabic only"],
+];
+
+export function languageSection(status: EngineStatus): HTMLElement {
+  const answer = select(LANGS, status.values["bader.answer_lang"] || "auto");
+  const summary = select(LANGS, status.values["bader.summary_lang"] || "auto");
+  const approvals = h("input", { type: "checkbox" }) as HTMLInputElement;
+  approvals.checked = (status.values["bader.approvals"] ?? "true") !== "false";
+  const feedback = h("div", {});
+  const apply = h("button", { class: "primary", text: "Apply" }) as HTMLButtonElement;
+  apply.addEventListener("click", async () => {
+    apply.disabled = true;
+    notice(feedback, true, "Saving…");
+    try {
+      await Bridge.engineApply(
+        {
+          "bader.answer_lang": answer.value,
+          "bader.summary_lang": summary.value,
+          "bader.approvals": approvals.checked ? "true" : "false",
+        },
+        {},
+        true,
+      );
+      notice(feedback, true, "Saved. The island uses it now; Telegram / WhatsApp after the engine restarts (a few seconds).");
+    } catch (err) {
+      notice(feedback, false, `Could not save: ${String(err)}`);
+    } finally {
+      apply.disabled = false;
+    }
+  });
+  return h(
+    "section",
+    {},
+    h("h2", {}, dot(status.found), h("span", { text: "Language & approvals  ·  اللغة والموافقات" })),
+    h("span", { class: "hint", text: "Ask in Arabic, get the answer in English (or the other way round)." }),
+    h("div", { class: "row" }, h("label", { text: "Answers" }), answer),
+    h("div", { class: "row" }, h("label", { text: "Meeting summaries" }), summary),
+    h("div", { class: "row" }, h("label", { text: "Ask before sending" }), approvals),
+    h("span", { class: "hint", text: "When on, Bader asks you before sending or deleting mail and changing your calendar." }),
+    h("div", { class: "row" }, apply),
+    feedback,
+  );
+}

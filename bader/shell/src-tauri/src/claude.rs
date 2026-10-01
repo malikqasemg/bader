@@ -22,7 +22,7 @@ const MAX_INLINE_TEXT: u64 = 200_000;
 pub const DEFAULT_MODEL: &str = "hermes-agent";
 
 const SYSTEM_PROMPT: &str = "You are Bader, a personal AI assistant. \
-Reply in the language the user writes in (Arabic or English). Be short and direct: answer first, detail on request. \
+Be short and direct: answer first, detail on request. Plain text, no markdown symbols. \
 If the user asks you to do something, do it. If an action is your own idea, ask before doing it.";
 
 #[derive(Default)]
@@ -71,12 +71,54 @@ pub struct ChatReply {
 /// One chat turn. Returns the assistant's text, or a message the island shows
 /// in the note view.
 pub async fn send(
+    app: &tauri::AppHandle,
     chat: &Chat,
     model: &str,
     query: String,
     context: Option<ChatContext>,
 ) -> Result<ChatReply, String> {
     let key = secrets::get("bader-engine-key").unwrap_or_default();
+
+    // Everything except a screenshot goes through the live runs stream (tool
+    // progress, approvals, fast snapshot answers). Screenshots need image input.
+    if !matches!(context, Some(ChatContext::Screen { .. })) {
+        let mut query_text = query.clone();
+        if chat.is_empty() {
+            match &context {
+                Some(ChatContext::File { name, path }) => {
+                    query_text = format!("{query}\n\n(Attached file: {name} at {path})");
+                }
+                Some(ChatContext::Window { app_name, title, url }) => {
+                    query_text = format!(
+                        "{query}\n\n(Context — App: {app_name}, Window: {title}{})",
+                        url.as_deref().map(|u| format!(", URL: {u}")).unwrap_or_default()
+                    );
+                }
+                _ => {}
+            }
+        }
+        let history: Vec<Value> = chat
+            .snapshot()
+            .into_iter()
+            .map(|m| {
+                let role = m.get("role").and_then(Value::as_str).unwrap_or("user").to_string();
+                let content = match m.get("content") {
+                    Some(Value::String(s)) => s.clone(),
+                    Some(Value::Array(parts)) => parts
+                        .iter()
+                        .filter_map(|p| p.get("text").and_then(Value::as_str))
+                        .collect::<Vec<_>>()
+                        .join(" "),
+                    _ => String::new(),
+                };
+                json!({ "role": role, "content": content })
+            })
+            .collect();
+        let text = crate::runs::send(app, &engine_url(), &key, SYSTEM_PROMPT, history, &query_text).await?;
+        chat.push(json!({ "role": "user", "content": query_text }));
+        chat.push(json!({ "role": "assistant", "content": text.clone() }));
+        return Ok(ChatReply { text });
+    }
 
     let mut content: Vec<Value> = Vec::new();
     // A screenshot rides along with the question it was taken for.
@@ -108,7 +150,8 @@ pub async fn send(
     content.push(json!({ "type": "text", "text": query }));
     chat.push(json!({ "role": "user", "content": content }));
 
-    let mut messages = vec![json!({ "role": "system", "content": SYSTEM_PROMPT })];
+    let system = format!("{SYSTEM_PROMPT}\n{}", crate::runs::language_rules(&crate::runs::prefs()));
+    let mut messages = vec![json!({ "role": "system", "content": system })];
     messages.extend(chat.snapshot());
     let model = if model.trim().is_empty() || model.starts_with("claude-") { DEFAULT_MODEL } else { model };
     let body = json!({ "model": model, "messages": messages, "stream": false });
@@ -139,7 +182,7 @@ pub async fn send(
     Ok(ChatReply { text })
 }
 
-fn engine_url() -> String {
+pub fn engine_url() -> String {
     std::env::var("BADER_ENGINE_URL")
         .ok()
         .filter(|v| !v.trim().is_empty())
