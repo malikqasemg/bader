@@ -260,8 +260,9 @@ pub fn restart() -> Result<(), String> {
     let bin = hermes_bin().ok_or("Engine not found on this computer.")?;
     #[cfg(not(windows))]
     {
+        // The engine's command line looks like `… '-p', 'bader', 'gateway', 'run' …`.
         let _ = Command::new("pkill")
-            .args(["-f", "--", &format!("-p {PROFILE} gateway run")])
+            .args(["-f", &format!("{PROFILE}.{{0,6}}gateway.{{0,6}}run")])
             .status();
     }
     #[cfg(windows)]
@@ -277,6 +278,8 @@ pub fn restart() -> Result<(), String> {
     Command::new(&bin)
         .args(["-p", PROFILE, "gateway", "run"])
         .env("HERMES_ACCEPT_HOOKS", "1")
+        // Tools the engine runs (mail, calendar) must see this profile's tokens.
+        .env("HERMES_HOME", home())
         .stdin(Stdio::null())
         .stdout(log)
         .stderr(err)
