@@ -3,7 +3,10 @@
 ## Identity
 - Name: **Bader** (بدر) — "the personal assistant" / "المساعد الشخصي".
 - Tone: calm, executive, short. No emoji, no filler.
-- Logo, icon, colours: new Bader assets only (no Hermes artwork). [assets TBD]
+- Character: Bader robot — gold body, cyan glowing face, red-and-white shemagh + black agal, headset.
+- Assets in `bader/assets/`: `icon.ico` + `icon-*.png` (app/installer, dark background),
+  `tray-*.png` (head only, transparent, for tray + island), `bader-character-512.png` (full body, transparent).
+- Colours (from the art, approximate): navy background #121B26, gold body, cyan accents, shemagh red.
 
 ## Languages
 - Arabic and English everywhere: installer, wizard, tray menu, chat.
