@@ -83,9 +83,15 @@ export function buildPrompt(onHeightChange: () => void): ViewHost {
       const url = await Bridge.voiceSpeak(text);
       player?.pause();
       player = new Audio(url);
+      player.onplay = () => void Bridge.face("speaking");
+      player.onended = () => void Bridge.face("happy", 3);
+      player.onpause = () => {
+        if (player && !player.ended) void Bridge.face("neutral");
+      };
       void player.play();
     } catch (err) {
       console.error("[bader] speak failed", err);
+      void Bridge.face("happy", 3);
     }
   }
 
@@ -96,6 +102,7 @@ export function buildPrompt(onHeightChange: () => void): ViewHost {
         player?.pause();
         await Bridge.voiceStart();
         recording = true;
+        void Bridge.face("listening");
         input.placeholder = "Listening… tap ■ to send · أستمع…";
       } catch (err) {
         State.noteMessage = String(err).replace(/^Error:\s*/, "");
@@ -107,6 +114,7 @@ export function buildPrompt(onHeightChange: () => void): ViewHost {
     }
     recording = false;
     listening = true;
+    void Bridge.face("thinking");
     input.placeholder = "Understanding… · جارٍ الفهم…";
     setMic();
     try {
@@ -145,6 +153,7 @@ export function buildPrompt(onHeightChange: () => void): ViewHost {
     State.stateOverride = "thinking";
     State.notify();
     onHeightChange();
+    void Bridge.face("thinking");
 
     const file = State.droppedFile;
     let context: ChatContext | null =
@@ -165,7 +174,9 @@ export function buildPrompt(onHeightChange: () => void): ViewHost {
       State.stateOverride = null;
       Sound.play("finish");
       if (byVoice || speakReplies) void speak(reply.text);
+      else void Bridge.face("happy", 3);
     } catch (err) {
+      void Bridge.face("concerned", 6);
       State.stateOverride = null;
       State.noteMessage = String(err).replace(/^Error:\s*/, "");
       State.view = "note";

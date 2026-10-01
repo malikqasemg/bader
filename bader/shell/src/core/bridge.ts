@@ -20,6 +20,10 @@ async function call<T>(cmd: string, args?: Record<string, unknown>): Promise<T |
   }
 }
 
+export type FaceName =
+  | "neutral" | "listening" | "thinking" | "speaking"
+  | "happy" | "concerned" | "surprised" | "celebrating";
+
 export interface AccountsStatus {
   gmail: boolean;
   gmailClient: boolean;
@@ -115,6 +119,10 @@ export const Bridge = {
   secretPresent: (key: string) => call<boolean>("secret_present", { key }),
   secretSet: (key: string, value: string) => callOrThrow<void>("secret_set", { key, value }),
   secretClear: (key: string) => callOrThrow<void>("secret_clear", { key }),
+
+  // ── Face screen (ESP32 on USB) ────────────────────────────────────────────
+  /** Shows a face on Bader's USB screen; with seconds, it returns to "neutral". */
+  face: (name: FaceName, seconds?: number) => call<void>("face_set", { name, seconds: seconds ?? null }),
 
   // ── Voice (mic in the island) ─────────────────────────────────────────────
   voiceStart: () => callOrThrow<void>("voice_start"),

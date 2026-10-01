@@ -3,6 +3,7 @@
 mod accounts;
 mod claude;
 mod engine;
+mod face;
 mod files;
 mod hooks;
 mod integrations;
@@ -270,6 +271,11 @@ async fn chat_send(
 }
 
 #[tauri::command]
+fn face_set(face: State<face::Face>, name: String, seconds: Option<f32>) {
+    face.set(&name, seconds);
+}
+
+#[tauri::command]
 fn voice_start(rec: State<voice::Recorder>) -> Result<(), String> {
     voice::start(&rec)
 }
@@ -505,6 +511,7 @@ pub fn run() {
         .manage(Pending::default())
         .manage(Chat::default())
         .manage(voice::Recorder::default())
+        .manage(face::Face::start())
         .invoke_handler(tauri::generate_handler![
             boot,
             save_settings,
@@ -526,6 +533,7 @@ pub fn run() {
             chat_reset,
             engine_status,
             voice_start,
+            face_set,
             voice_stop,
             voice_cancel,
             voice_speak,

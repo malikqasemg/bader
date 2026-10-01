@@ -21,6 +21,11 @@ Durations are estimates.
 - [x] Island mic: talk in Arabic/English (engine STT, auto language), spoken replies (engine TTS)
 - [x] Look: attach a screenshot of the screen to a question (macOS)
 
+## Phase 3c — Live face screen (done 2026-10-01)
+- [x] ESP32-C6-LCD-1.47 runs MicroPython + `bader/face/device`; 8 faces with English/Arabic labels
+- [x] App auto-finds the screen on USB and shows listening / thinking / speaking / done / problem
+- [ ] "New message" (surprised) when background mail sync finds important mail
+
 ## Phase 3b — Screen buddy (ideas from Clicky, MIT: farzaa/clicky, openclicky, clicky_windows)
 - [ ] Push-to-talk hotkey (no need to open the island)
 - [ ] Point at things: cursor overlay flies to the button Bader talks about
