@@ -1,5 +1,6 @@
 // Bader for Windows — app wiring and the commands the island calls.
 
+mod accounts;
 mod claude;
 mod engine;
 mod files;
@@ -288,6 +289,57 @@ async fn voice_stop(app: AppHandle) -> Result<voice::Heard, String> {
     .map_err(|e| e.to_string())?
 }
 
+// ── Accounts (Gmail, Outlook) ────────────────────────────────────────────────
+
+async fn blocking<T: Send + 'static>(f: impl FnOnce() -> Result<T, String> + Send + 'static) -> Result<T, String> {
+    tauri::async_runtime::spawn_blocking(f).await.map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+async fn accounts_status() -> Result<accounts::AccountsStatus, String> {
+    blocking(|| Ok(accounts::status())).await
+}
+
+#[tauri::command]
+async fn gmail_find_client_file() -> Result<Option<String>, String> {
+    blocking(|| Ok(accounts::gmail_find_client_file())).await
+}
+
+#[tauri::command]
+async fn gmail_set_client(path: String) -> Result<(), String> {
+    blocking(move || accounts::gmail_set_client(&path)).await
+}
+
+#[tauri::command]
+async fn gmail_auth_url() -> Result<String, String> {
+    blocking(accounts::gmail_auth_url).await
+}
+
+#[tauri::command]
+async fn gmail_auth_code(code: String) -> Result<(), String> {
+    blocking(move || accounts::gmail_auth_code(&code)).await
+}
+
+#[tauri::command]
+async fn gmail_disconnect() -> Result<(), String> {
+    blocking(accounts::gmail_disconnect).await
+}
+
+#[tauri::command]
+async fn outlook_start(client_id: String, tenant: String) -> Result<accounts::DeviceCode, String> {
+    accounts::outlook_start(&client_id, &tenant).await
+}
+
+#[tauri::command]
+async fn outlook_wait(device_code: String, interval: u64, expires_in: u64) -> Result<String, String> {
+    accounts::outlook_wait(&device_code, interval, expires_in).await
+}
+
+#[tauri::command]
+fn outlook_disconnect() -> Result<(), String> {
+    accounts::outlook_disconnect()
+}
+
 #[tauri::command]
 async fn capture_screen() -> Result<String, String> {
     tauri::async_runtime::spawn_blocking(voice::capture_screen)
@@ -478,6 +530,15 @@ pub fn run() {
             voice_cancel,
             voice_speak,
             capture_screen,
+            accounts_status,
+            gmail_find_client_file,
+            gmail_set_client,
+            gmail_auth_url,
+            gmail_auth_code,
+            gmail_disconnect,
+            outlook_start,
+            outlook_wait,
+            outlook_disconnect,
             engine_apply,
             ingest_file,
             secret_present,

@@ -20,6 +20,22 @@ async function call<T>(cmd: string, args?: Record<string, unknown>): Promise<T |
   }
 }
 
+export interface AccountsStatus {
+  gmail: boolean;
+  gmailClient: boolean;
+  outlook: boolean;
+  outlookClientId: string;
+  outlookTenant: string;
+}
+
+export interface DeviceCode {
+  userCode: string;
+  verificationUri: string;
+  deviceCode: string;
+  interval: number;
+  expiresIn: number;
+}
+
 export interface EngineStatus {
   found: boolean;
   running: boolean;
@@ -109,6 +125,19 @@ export const Bridge = {
   voiceSpeak: (text: string) => callOrThrow<string>("voice_speak", { text }),
   /** Screenshot of the main display for one question; returns its path. */
   captureScreen: () => callOrThrow<string>("capture_screen"),
+
+  // ── Accounts (Gmail, Outlook) ─────────────────────────────────────────────
+  accountsStatus: () => call<AccountsStatus>("accounts_status"),
+  gmailFindClientFile: () => call<string | null>("gmail_find_client_file"),
+  gmailSetClient: (path: string) => callOrThrow<void>("gmail_set_client", { path }),
+  gmailAuthUrl: () => callOrThrow<string>("gmail_auth_url"),
+  gmailAuthCode: (code: string) => callOrThrow<void>("gmail_auth_code", { code }),
+  gmailDisconnect: () => callOrThrow<void>("gmail_disconnect"),
+  outlookStart: (clientId: string, tenant: string) =>
+    callOrThrow<DeviceCode>("outlook_start", { clientId, tenant }),
+  outlookWait: (deviceCode: string, interval: number, expiresIn: number) =>
+    callOrThrow<string>("outlook_wait", { deviceCode, interval, expiresIn }),
+  outlookDisconnect: () => callOrThrow<void>("outlook_disconnect"),
 
   // ── Engine (AI + voice settings) ──────────────────────────────────────────
   engineStatus: () => call<EngineStatus>("engine_status"),

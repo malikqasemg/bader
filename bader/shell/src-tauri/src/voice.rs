@@ -231,7 +231,7 @@ pub fn speak(app: &AppHandle, text: &str) -> Result<String, String> {
 }
 
 /// Engine folder that holds the Python environment (`hermes-agent`).
-fn engine_root() -> PathBuf {
+pub(crate) fn engine_root() -> PathBuf {
     if let Some(p) = std::env::var_os("BADER_ENGINE_ROOT").filter(|v| !v.is_empty()) {
         return PathBuf::from(p);
     }
@@ -248,7 +248,7 @@ fn engine_root() -> PathBuf {
     base.join("hermes-agent")
 }
 
-fn engine_python(root: &PathBuf) -> PathBuf {
+pub(crate) fn engine_python(root: &PathBuf) -> PathBuf {
     if let Some(p) = std::env::var_os("BADER_ENGINE_PYTHON").filter(|v| !v.is_empty()) {
         return PathBuf::from(p);
     }

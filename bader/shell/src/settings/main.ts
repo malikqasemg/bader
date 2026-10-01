@@ -7,6 +7,7 @@ import { Bridge, onEvent, type HookStatus } from "../core/bridge";
 import { DEFAULT_SETTINGS, type Settings } from "../core/state";
 import { h, clear } from "../views/dom";
 import { aiSection, voiceSection } from "./engine";
+import { accountsSection } from "./accounts";
 
 let settings: Settings = { ...DEFAULT_SETTINGS };
 let version = "";
@@ -428,6 +429,7 @@ async function main() {
   root.append(
     h("h1", {}, h("span", { text: "Bader" }), h("span", { class: "version", text: version })),
     keySection("bader-license-key", "Licence  ·  الترخيص", "Licence key", "BADR-XXXX-XXXX", "No licence yet — paid skills stay locked.", hasLicense),
+    accountsSection(),
     aiSection(engine),
     voiceSection(engine),
     keySection("bader-engine-key", "Bader engine  ·  المحرك", "Engine key", "API_SERVER_KEY of the engine", "No engine key — fine for an engine on this PC without a key.", hasEngineKey),
