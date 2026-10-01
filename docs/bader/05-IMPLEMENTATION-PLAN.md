@@ -7,12 +7,13 @@ Durations are estimates.
 - [x] Docs 00–05 in `docs/bader/`
 
 ## Phase 1 — Rebrand (week 1)
-- [ ] Desktop: `apps/desktop/package.json` productName → Bader; appId → io.inetgenius.bader;
-      `electron-builder.config.cjs` display/artifact names; icons in `apps/desktop/assets`
+- [ ] Desktop shell: port coucou's Windows Tauri app (`coucou/windows`) into `bader/shell/`;
+      replace Claude Code hooks with a client for the Hermes gateway API; new Bader icon/character
+- [ ] Bundle Hermes engine headless inside the installer (runs as background process)
 - [ ] CLI/command name `bader` alongside `hermes` (keep `hermes` internally for upstream merges)
 - [ ] `SOUL.md` → Bader persona, Arabic + English
 - [ ] Arabic strings: review `locales/ar.yaml`, add Bader-specific keys
-- [ ] Build Windows installer: `cd apps/desktop && npm run dist:win`
+- [ ] Build Windows installer from `bader/shell` (Tauri NSIS setup.exe)
 
 ## Phase 2 — Licence (week 2)
 - [ ] Licence server: add `product` column + `/bader/*` endpoints to iNetBuzz `mcp-server`

@@ -11,7 +11,13 @@
 - Chat replies follow the language the user wrote in. Formal Arabic by default,
   Gulf dialect understood in voice notes.
 
-## Desktop app (Hermes Desktop rebranded)
+## Desktop app — coucou-style shell (decision 2026-10-01)
+Bader's face is a small always-on-top island at the top of the screen + tray icon,
+modelled on coucou (MIT code; its name, Mochi character and sounds are NOT reused).
+Hermes runs hidden underneath as the engine. The island shows status, approvals
+(Approve / Skip), quick chat and the setup wizard; full settings open in a small window.
+
+### Screens
 | Screen | Purpose |
 |---|---|
 | Welcome + licence | Enter key, see plan and expiry |

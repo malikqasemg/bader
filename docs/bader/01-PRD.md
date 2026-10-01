@@ -55,7 +55,8 @@ follow-up?"; voice notes in Arabic work; 18:00 end-of-day email.
 | Licence conversion after trial | [to set] |
 
 ## 6. Technical Requirements
-- Base: Hermes Agent (Python agent + gateway) + Hermes Desktop (Electron).
+- Engine: Hermes Agent (Python agent + gateway), runs hidden.
+- Face: coucou-style Tauri shell (top-of-screen island + tray), MIT code only.
 - Reused from Hermes: Telegram platform, WhatsApp Cloud adapter
   (`gateway/platforms/whatsapp_cloud.py`), MS Graph webhook adapter
   (`gateway/platforms/msgraph_webhook.py`), memory, cron, skills, `locales/ar.yaml`.
