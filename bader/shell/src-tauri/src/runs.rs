@@ -79,7 +79,7 @@ pub fn snapshot_text() -> Option<String> {
         v.get("updated").and_then(Value::as_str).unwrap_or("recently")
     );
     if let Some(events) = v.get("calendar").and_then(Value::as_array) {
-        out.push_str("Calendar (next 2 days):\n");
+        out.push_str("Calendar (last 3 days to next 7 days):\n");
         if events.is_empty() {
             out.push_str("- none\n");
         }
@@ -93,7 +93,7 @@ pub fn snapshot_text() -> Option<String> {
         }
     }
     if let Some(mails) = v.get("gmail").and_then(Value::as_array) {
-        out.push_str("Gmail inbox (last 2 days, newest first, promotions/social excluded):\n");
+        out.push_str("Gmail inbox (newest first; last 2 days = all mail except promotions/social, days 3-7 = primary and important mail only):\n");
         for m in mails {
             out.push_str(&format!(
                 "- {}{} | from {} | {} | {}\n",

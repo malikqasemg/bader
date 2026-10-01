@@ -208,6 +208,15 @@ def _(): return ask("asdkj qwe ؟؟ 123 ..")
 @sc("24", "Reasoning / math", "correct: 12% of 3.4M = 408,000")
 def _(): return ask("If revenue is 3.4 million riyals and margin is 12%, what's the profit?")
 
+@sc("26", "News in English", "headlines with sources, fast")
+def _(): return ask("What's the latest news about Cisco this week?")
+
+@sc("27", "Mail from earlier this week", "answers from the 7-day snapshot, quick lane")
+def _(): return ask("What important emails did I get 4 or 5 days ago?")
+
+@sc("28", "This week's mail summary", "week summary, quick lane")
+def _(): return ask("Give me a summary of this week's important emails in 5 lines")
+
 def burst():
     qs = ["ما هي اجتماعاتي اليوم؟", "Any urgent emails?", "What's 2+2?", "ابحث عن سعر سهم سيسكو", "Summarise my inbox in 3 lines"]
     t = time.time()

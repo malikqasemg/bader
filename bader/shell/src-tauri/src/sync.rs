@@ -1,4 +1,4 @@
-// Background sync: every few minutes, pull recent mail and the next two days
+// Background sync: every few minutes, pull the last week of mail and the calendar (3 days back, 7 ahead)
 // of calendar into the engine profile (bader_inbox.json). Mail / calendar
 // questions are then answered from this snapshot in one model call, and the
 // island + face screen get "unread" and "next meeting" for the idle display.

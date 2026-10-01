@@ -1,6 +1,6 @@
 """Bader background sync — runs in the engine's Python every few minutes.
 
-Fetches recent mail and the next two days of calendar from the connected
+Fetches the last 7 days of mail and the calendar from 3 days back to 7 days ahead from the connected
 accounts and writes a compact snapshot to $HERMES_HOME/bader_inbox.json.
 The island answers mail/calendar questions from this snapshot in one model
 call instead of a multi-step tool loop.
@@ -43,16 +43,24 @@ def _gapi(*args, timeout=90):
 def gmail():
     if not os.path.isfile(os.path.join(HOME, "google_token.json")):
         return None
-    items = _gapi("gmail", "search", "newer_than:2d in:inbox -category:promotions -category:social", "--max", "25")
+    # Everything from the last 2 days; for days 3-7 only primary/important mail,
+    # so a week fits in the snapshot without a wall of newsletters.
+    base = "in:inbox -category:promotions -category:social"
+    items = _gapi("gmail", "search", f"newer_than:2d {base}", "--max", "80")
+    seen = {m.get("id") for m in items}
+    older = _gapi("gmail", "search",
+                  f"newer_than:7d older_than:2d {base} {{category:primary is:important is:starred}}", "--max", "100")
+    items += [m for m in older if m.get("id") not in seen]
     mails = []
-    for m in items:
+    for n, m in enumerate(items):
         labels = m.get("labels") or []
         mails.append({
             "id": m.get("id"),
             "from": _clean(m.get("from"), 80),
             "subject": _clean(m.get("subject"), 140),
             "date": m.get("date"),
-            "snippet": _clean(m.get("snippet"), 200),
+            # Full snippet for the newest mail, shorter for older ones (keeps the snapshot small).
+            "snippet": _clean(m.get("snippet"), 200 if n < 40 else 110),
             "unread": "UNREAD" in labels,
             "important": "IMPORTANT" in labels,
         })
@@ -63,9 +71,10 @@ def calendar():
     if not os.path.isfile(os.path.join(HOME, "google_token.json")):
         return None
     now = dt.datetime.now(dt.timezone.utc)
-    start = now.replace(hour=0, minute=0, second=0, microsecond=0) - dt.timedelta(hours=3)
-    end = start + dt.timedelta(days=2, hours=3)
-    items = _gapi("calendar", "list", "--start", start.isoformat(), "--end", end.isoformat(), "--max", "20")
+    today = now.replace(hour=0, minute=0, second=0, microsecond=0) - dt.timedelta(hours=3)
+    start = today - dt.timedelta(days=3)
+    end = today + dt.timedelta(days=7, hours=3)
+    items = _gapi("calendar", "list", "--start", start.isoformat(), "--end", end.isoformat(), "--max", "60")
     events = []
     for e in items:
         loc = e.get("location") or ""

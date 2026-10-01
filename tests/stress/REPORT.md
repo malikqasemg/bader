@@ -15,7 +15,7 @@ Every approval request was answered **Deny** by the test.
 | 06 | Send email | engine | 11 s | Approval asked → denied → "not sent" |
 | 07 | Book a meeting | engine | 18 s | Approval asked → denied → not booked |
 | 08 | Delete job-alert mails | engine | 16 s | Approval asked → denied → nothing deleted |
-| 09 | Cisco news (Arabic) | engine | 60–72 s | OK but slow (browser fallback) |
+| 09 | Cisco news (Arabic) | engine | 16 s | OK (was 60–83 s; now the bader-news skill) |
 | 10 | Riyadh weather | engine | 11 s | OK: 36 °C (was wrong / no answer) |
 | 11 | PowerPoint, 4 slides | engine | 23 s | OK (was 81 s) |
 | 12 | Excel of emails | engine | 28 s | OK (was 280 s) |
@@ -55,6 +55,7 @@ Every approval request was answered **Deny** by the test.
 
 ## Limits that remain
 
-- Web news takes ~1 minute when sites block plain extraction.
-- Webex and Outlook are not connected; the bader_inbox.json snapshot covers only 2 days.
+- The snapshot covers 7 days of mail (days 3–7: primary/important only) and the calendar from 3 days back to 7 ahead; older items need a search (slower).
+- The quick lane sometimes miscounts "N days ago".
+- Webex and Outlook are not connected.
 - Telegram/WhatsApp, the ESP32 button and voice were not part of this run.
