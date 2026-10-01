@@ -6,6 +6,7 @@ import "./settings.css";
 import { Bridge, onEvent, type HookStatus } from "../core/bridge";
 import { DEFAULT_SETTINGS, type Settings } from "../core/state";
 import { h, clear } from "../views/dom";
+import { aiSection, voiceSection } from "./engine";
 
 let settings: Settings = { ...DEFAULT_SETTINGS };
 let version = "";
@@ -412,6 +413,7 @@ async function main() {
 
   const hasLicense = (await Bridge.secretPresent("bader-license-key")) ?? false;
   const hasEngineKey = (await Bridge.secretPresent("bader-engine-key")) ?? false;
+  const engine = (await Bridge.engineStatus()) ?? { found: false, running: false, home: "", values: {}, keys: {} };
 
   const keys = [
     "stripe-api-key", "github-token", "vercel-token",
@@ -426,6 +428,8 @@ async function main() {
   root.append(
     h("h1", {}, h("span", { text: "Bader" }), h("span", { class: "version", text: version })),
     keySection("bader-license-key", "Licence  ·  الترخيص", "Licence key", "BADR-XXXX-XXXX", "No licence yet — paid skills stay locked.", hasLicense),
+    aiSection(engine),
+    voiceSection(engine),
     keySection("bader-engine-key", "Bader engine  ·  المحرك", "Engine key", "API_SERVER_KEY of the engine", "No engine key — fine for an engine on this PC without a key.", hasEngineKey),
     generalSection(),
     h("div", {

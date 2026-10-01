@@ -11,6 +11,7 @@ import type { Island } from "./island";
 const KEY_FOR: Record<string, string> = {
   integration_outlook: "outlook-connected",
   integration_webex: "webex-connected",
+  integration_gmail: "gmail-connected",
 };
 
 const clearTimers = new Map<string, number>();

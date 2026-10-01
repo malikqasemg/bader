@@ -60,10 +60,11 @@ const task = (
 export const INTEGRATION_AGENTS: AgentTask[] = [
   task("integration_outlook", "Outlook", "#0F6CBD", "n8n"),
   task("integration_webex", "Webex", "#07C1E4", "n8n"),
+  task("integration_gmail", "Gmail", "#EA4335", "n8n"),
 ];
 
 /** Pills that are always shown (no opt-in needed). */
-export const ALWAYS_ON_INTEGRATIONS = ["integration_outlook", "integration_webex"];
+export const ALWAYS_ON_INTEGRATIONS = ["integration_outlook", "integration_webex", "integration_gmail"];
 
 export const TOGGLEABLE_INTEGRATION_IDS: string[] = [];
 
@@ -93,7 +94,7 @@ export const DEFAULT_SETTINGS: Settings = {
   soundVolume: 0.12,
   autoCloseInterval: 15,
   absenceInterval: 180,
-  activeIntegrations: ["integration_outlook", "integration_webex"],
+  activeIntegrations: ["integration_outlook", "integration_webex", "integration_gmail"],
   screen: "primary",
   autostart: false,
   hooksInstalled: false,

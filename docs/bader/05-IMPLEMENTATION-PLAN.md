@@ -15,6 +15,9 @@ Durations are estimates.
 - [ ] `SOUL.md` → Bader persona, Arabic + English
 - [ ] Arabic strings: review `locales/ar.yaml`, add Bader-specific keys
 - [x] Build Windows installer from `bader/shell` (Tauri NSIS setup.exe) — v0.1.0
+- [x] macOS build of the shell (DMG) for testing
+- [x] Settings: AI (provider, key, model) and Voice (Arabic + English STT, voice, spoken replies) → engine profile
+- [x] Connector pills: Outlook, Webex, Gmail
 - [ ] Settings + wizard in Arabic (RTL); Bader tray icon (head) instead of app icon
 
 ## Phase 2 — Licence (week 2)
@@ -29,6 +32,7 @@ Durations are estimates.
 - [ ] `bader-webex`: meetings, transcripts, summaries, messages (new MCP server)
 - [ ] `bader-briefs`: morning / evening brief, meeting follow-up, action items
 - [ ] `bader-core`: approval rule, audit, Arabic/English behaviour
+- [ ] `bader-gmail`: Gmail read/summarise/draft (reuse engine google-workspace skill)
 - [ ] Channels: enable Telegram + WhatsApp Cloud adapter in the wizard
 
 ## Phase 4 — Pilot (weeks 6–8)

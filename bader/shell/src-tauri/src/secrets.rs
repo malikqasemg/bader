@@ -11,6 +11,7 @@ pub const KNOWN_KEYS: &[&str] = &[
     "bader-license-key",
     "outlook-connected",
     "webex-connected",
+    "gmail-connected",
     "anthropic-api-key",
     "n8n-url",
     "n8n-api-key",

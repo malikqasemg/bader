@@ -20,6 +20,16 @@ async function call<T>(cmd: string, args?: Record<string, unknown>): Promise<T |
   }
 }
 
+export interface EngineStatus {
+  found: boolean;
+  running: boolean;
+  home: string;
+  /** Current YAML values, e.g. "model.default", "tts.edge.voice". */
+  values: Record<string, string>;
+  /** Which API keys are present in the engine (never their values). */
+  keys: Record<string, boolean>;
+}
+
 export interface BootInfo {
   settings: Settings;
   /** Logical screen rect of the monitor the island lives on. */
@@ -89,6 +99,12 @@ export const Bridge = {
   secretPresent: (key: string) => call<boolean>("secret_present", { key }),
   secretSet: (key: string, value: string) => callOrThrow<void>("secret_set", { key, value }),
   secretClear: (key: string) => callOrThrow<void>("secret_clear", { key }),
+
+  // ── Engine (AI + voice settings) ──────────────────────────────────────────
+  engineStatus: () => call<EngineStatus>("engine_status"),
+  /** Writes engine settings; keys go to the engine's .env, never back to the page. */
+  engineApply: (values: Record<string, string>, secrets: Record<string, string>, restart: boolean) =>
+    callOrThrow<void>("engine_apply", { values, secrets, restart }),
 
   // ── Integrations ──────────────────────────────────────────────────────────
   refreshIntegration: (id: string) => call<void>("refresh_integration", { id }),

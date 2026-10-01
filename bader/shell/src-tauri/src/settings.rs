@@ -33,7 +33,11 @@ impl Default for Settings {
             sound_volume: 0.12,
             auto_close_interval: 15.0,
             absence_interval: 180.0,
-            active_integrations: vec!["integration_outlook".into(), "integration_webex".into()],
+            active_integrations: vec![
+                "integration_outlook".into(),
+                "integration_webex".into(),
+                "integration_gmail".into(),
+            ],
             screen: "primary".into(),
             autostart: false,
             hooks_installed: false,

@@ -1,6 +1,7 @@
 // Bader for Windows — app wiring and the commands the island calls.
 
 mod claude;
+mod engine;
 mod files;
 mod hooks;
 mod integrations;
@@ -267,6 +268,28 @@ async fn chat_send(
 }
 
 #[tauri::command]
+async fn engine_status() -> engine::EngineStatus {
+    engine::status().await
+}
+
+#[tauri::command]
+async fn engine_apply(
+    values: std::collections::HashMap<String, String>,
+    secrets: std::collections::HashMap<String, String>,
+    restart: bool,
+) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        engine::apply(values, secrets)?;
+        if restart {
+            engine::restart()?;
+        }
+        Ok(())
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
 fn chat_reset(chat: State<Chat>) {
     chat.reset();
 }
@@ -413,6 +436,8 @@ pub fn run() {
             log_line,
             chat_send,
             chat_reset,
+            engine_status,
+            engine_apply,
             ingest_file,
             secret_present,
             secret_set,

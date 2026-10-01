@@ -47,6 +47,7 @@ function arr(id: string, key: string): Record<string, unknown>[] {
 const OPEN_URLS: Record<string, string> = {
   integration_outlook: "https://outlook.office.com/mail/",
   integration_webex: "https://web.webex.com/",
+  integration_gmail: "https://mail.google.com/",
   integration_resend: "https://resend.com/emails",
   integration_vercel: "https://vercel.com/dashboard",
   integration_github: "https://github.com",
