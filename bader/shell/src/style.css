@@ -1435,3 +1435,5 @@ input[type="range"]::-webkit-slider-thumb {
 .approve-btn { background: #22c55e; color: #06200f; }
 .deny-btn { background: rgba(255, 255, 255, 0.1); color: #f4505e; }
 .approve-btn:disabled, .deny-btn:disabled { opacity: 0.5; }
+
+.reply.streaming { opacity: 0.92; }

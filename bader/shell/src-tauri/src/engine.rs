@@ -39,6 +39,8 @@ const VOICE_KEYS: &[&str] = &[
     "bader.answer_lang",
     "bader.summary_lang",
     "bader.approvals",
+    "bader.quick_lane",
+    "bader.quick_model",
 ];
 
 /// .env keys the settings window may write.
@@ -196,6 +198,14 @@ pub async fn status() -> EngineStatus {
                 v.insert(k.to_string(), prefs.get(j).and_then(Value::as_str).unwrap_or("auto").to_string());
             }
             v.insert(
+                "bader.quick_lane".into(),
+                (prefs.get("quick_lane").and_then(Value::as_bool) != Some(false)).to_string(),
+            );
+            v.insert(
+                "bader.quick_model".into(),
+                prefs.get("quick_model").and_then(Value::as_str).unwrap_or("").to_string(),
+            );
+            v.insert(
                 "bader.approvals".into(),
                 (prefs.get("approvals").and_then(Value::as_bool) != Some(false)).to_string(),
             );
@@ -221,6 +231,23 @@ pub fn apply(mut values: HashMap<String, String>, secrets: HashMap<String, Strin
     let approvals = values.remove("bader.approvals");
     if answer.is_some() || summary.is_some() || approvals.is_some() {
         write_prefs(&dir, answer, summary, approvals)?;
+    }
+    let quick_lane = values.remove("bader.quick_lane");
+    let quick_model = values.remove("bader.quick_model");
+    if quick_lane.is_some() || quick_model.is_some() {
+        let path = dir.join("bader_prefs.json");
+        let mut cur: Value = std::fs::read_to_string(&path)
+            .ok()
+            .and_then(|t| serde_json::from_str(&t).ok())
+            .unwrap_or_else(|| serde_json::json!({}));
+        if let Some(q) = quick_lane {
+            cur["quick_lane"] = Value::Bool(q != "false");
+        }
+        if let Some(m) = quick_model {
+            cur["quick_model"] = Value::String(m.trim().to_string());
+        }
+        std::fs::write(&path, serde_json::to_string_pretty(&cur).unwrap_or_default())
+            .map_err(|e| format!("Could not save preferences: {e}"))?;
     }
     let ar = values.remove("bader.voice_ar");
     let en = values.remove("bader.voice_en");

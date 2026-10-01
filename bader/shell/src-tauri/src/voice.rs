@@ -271,7 +271,117 @@ fn helper_script(app: &AppHandle, name: &str) -> Option<PathBuf> {
 }
 
 fn run_helper(app: &AppHandle, args: &[&str]) -> Result<Value, String> {
+    // Fast path: the long-lived voice worker (speech model already loaded).
+    let req = match args {
+        ["stt", path] => Some(serde_json::json!({ "op": "stt", "path": path })),
+        ["tts", text_path, out] => Some(serde_json::json!({ "op": "tts", "text_path": text_path, "out": out })),
+        _ => None,
+    };
+    if let Some(req) = req {
+        match worker_call(app, &req) {
+            Ok(v) => return Ok(v),
+            Err(e) => crate::log::line(format!("voice worker unavailable ({e}); one-shot fallback")),
+        }
+    }
     run_script(app, "bader_voice.py", args)
+}
+
+// ── Voice worker: one Python process that keeps the speech model loaded ──────
+
+struct Worker {
+    child: std::process::Child,
+    stdin: std::process::ChildStdin,
+    out: std::io::BufReader<std::process::ChildStdout>,
+}
+
+static WORKER: Mutex<Option<Worker>> = Mutex::new(None);
+
+fn spawn_worker(app: &AppHandle) -> Result<Worker, String> {
+    use std::io::BufRead;
+    let root = engine_root();
+    let python = engine_python(&root);
+    if !python.is_file() {
+        return Err("engine not installed".into());
+    }
+    let script = helper_script(app, "bader_voice.py").ok_or("voice helper missing")?;
+    let mut cmd = Command::new(&python);
+    cmd.arg(&script)
+        .arg("serve")
+        .current_dir(&root)
+        .env("PYTHONPATH", &root)
+        .env("HERMES_HOME", crate::engine::home())
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null());
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x0800_0000);
+    }
+    let mut child = cmd.spawn().map_err(|e| e.to_string())?;
+    let stdin = child.stdin.take().ok_or("no stdin")?;
+    let mut out = std::io::BufReader::new(child.stdout.take().ok_or("no stdout")?);
+    let mut line = String::new();
+    loop {
+        line.clear();
+        if out.read_line(&mut line).map_err(|e| e.to_string())? == 0 {
+            return Err("worker exited during start-up".into());
+        }
+        if line.starts_with("@@") {
+            break;
+        }
+    }
+    crate::log::line("voice worker ready");
+    Ok(Worker { child, stdin, out })
+}
+
+fn worker_call(app: &AppHandle, req: &Value) -> Result<Value, String> {
+    use std::io::{BufRead, Write};
+    let mut slot = WORKER.lock().unwrap();
+    if slot.is_none() {
+        *slot = Some(spawn_worker(app)?);
+    }
+    let w = slot.as_mut().unwrap();
+    let result = (|| -> Result<Value, String> {
+        writeln!(w.stdin, "{req}").map_err(|e| e.to_string())?;
+        w.stdin.flush().map_err(|e| e.to_string())?;
+        let mut line = String::new();
+        loop {
+            line.clear();
+            if w.out.read_line(&mut line).map_err(|e| e.to_string())? == 0 {
+                return Err("worker exited".into());
+            }
+            if let Some(json) = line.strip_prefix("@@") {
+                return serde_json::from_str(json.trim()).map_err(|e| e.to_string());
+            }
+        }
+    })();
+    if result.is_err() {
+        if let Some(mut dead) = slot.take() {
+            let _ = dead.child.kill();
+        }
+    }
+    result
+}
+
+/// Starts the voice worker in the background so the first voice note is quick.
+pub fn prewarm(app: AppHandle) {
+    std::thread::spawn(move || {
+        let mut slot = WORKER.lock().unwrap();
+        if slot.is_none() {
+            match spawn_worker(&app) {
+                Ok(w) => *slot = Some(w),
+                Err(e) => crate::log::line(format!("voice worker not started: {e}")),
+            }
+        }
+    });
+}
+
+/// Restarts the worker (after Voice settings change).
+pub fn restart_worker() {
+    if let Some(mut w) = WORKER.lock().unwrap().take() {
+        let _ = w.child.kill();
+    }
 }
 
 /// Runs one of Bader's helper scripts with the engine's Python; returns the

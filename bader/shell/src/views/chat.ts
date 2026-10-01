@@ -171,28 +171,99 @@ export function buildPrompt(onHeightChange: () => void): ViewHost {
     mic.append(svg(recording ? ICONS.stop : ICONS.mic, recording ? 10 : 13));
   }
 
-  async function speak(text: string) {
-    try {
-      const url = await Bridge.voiceSpeak(text);
-      player?.pause();
+  // ── Speech: sentences are voiced as soon as they are complete, while the
+  // rest of the answer is still streaming; the next one is prepared during playback.
+  let streamText = "";
+  let spokenUpTo = 0;
+  let speechOn = false;
+  let streaming = false;
+  let playing = false;
+  let speechGen = 0;
+  const synthQueue: Promise<string | null>[] = [];
+
+  function stopSpeech() {
+    speechGen++;
+    synthQueue.length = 0;
+    player?.pause();
+    player = null;
+    playing = false;
+  }
+
+  function playUrl(url: string, gen: number): Promise<void> {
+    return new Promise((resolve) => {
+      if (gen !== speechGen) return resolve();
       player = new Audio(url);
-      player.onplay = () => void Bridge.face("speaking");
-      player.onended = () => void Bridge.face("happy", 3);
-      player.onpause = () => {
-        if (player && !player.ended) void Bridge.face("idle");
-      };
-      void player.play();
-    } catch (err) {
-      console.error("[bader] speak failed", err);
-      void Bridge.face("happy", 3);
+      player.onended = () => resolve();
+      player.onpause = () => resolve();
+      player.onerror = () => resolve();
+      void player.play().catch(() => resolve());
+    });
+  }
+
+  async function playLoop() {
+    if (playing) return;
+    playing = true;
+    const gen = speechGen;
+    void Bridge.face("speaking");
+    while (synthQueue.length && gen === speechGen) {
+      const url = await synthQueue.shift()!;
+      if (url && gen === speechGen) await playUrl(url, gen);
+    }
+    if (gen === speechGen) {
+      playing = false;
+      if (!streaming) void Bridge.face("happy", 3);
     }
   }
+
+  function enqueueSpeech(segment: string) {
+    const t = plain(segment).trim();
+    if (!t) return;
+    synthQueue.push(Bridge.voiceSpeak(t).catch(() => null));
+    void playLoop();
+  }
+
+  /** Voices every complete sentence received so far (or the rest, when final). */
+  function speakProgress(final: boolean) {
+    if (!speechOn) return;
+    const rest = streamText.slice(spokenUpTo);
+    if (final) {
+      spokenUpTo = streamText.length;
+      enqueueSpeech(rest);
+      return;
+    }
+    let cut = -1;
+    const re = /[.!?؟\n](?=\s|$)/g;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(rest))) {
+      if (m.index + 1 >= 24) cut = m.index + 1;
+    }
+    if (cut > 0) {
+      spokenUpTo += cut;
+      enqueueSpeech(rest.slice(0, cut));
+    }
+  }
+
+  void onEvent<string>("bader-delta", (d) => {
+    if (!sending) return;
+    streamText += d;
+    streaming = true;
+    renderedCount = -1;
+    State.notify();
+    speakProgress(false);
+  });
+  void onEvent<null>("bader-delta-reset", () => {
+    stopSpeech();
+    streamText = "";
+    spokenUpTo = 0;
+    renderedCount = -1;
+    State.notify();
+  });
 
   async function toggleMic() {
     if (sending || listening) return;
     if (!recording) {
       try {
-        player?.pause();
+        stopSpeech();
         await Bridge.voiceStart();
         recording = true;
         void Bridge.face("listening");
@@ -240,6 +311,11 @@ export function buildPrompt(onHeightChange: () => void): ViewHost {
     if (!query || sending) return;
     input.value = "";
     sending = true;
+    stopSpeech();
+    streamText = "";
+    spokenUpTo = 0;
+    streaming = false;
+    speechOn = byVoice || speakReplies;
     Sound.play("send");
 
     State.chatHistory.push({ id: nextId++, role: "user", content: query });
@@ -269,8 +345,23 @@ export function buildPrompt(onHeightChange: () => void): ViewHost {
       Sound.play("finish");
       runStatus = "";
       hideApproval(null);
-      if (byVoice || speakReplies) void speak(plain(reply.text));
-      else void Bridge.face("happy", 3);
+      streaming = false;
+      if (speechOn) {
+        const finalText = reply.text;
+        if (spokenUpTo > 0 && finalText.trim().startsWith(streamText.slice(0, spokenUpTo).trim())) {
+          streamText = finalText; // finish from where the streamed speech stopped
+          speakProgress(true);
+        } else if (spokenUpTo === 0) {
+          streamText = finalText;
+          speakProgress(true);
+        } else {
+          speakProgress(true);
+        }
+        if (!playing && !synthQueue.length) void Bridge.face("happy", 3);
+      } else {
+        void Bridge.face("happy", 3);
+      }
+      streamText = "";
     } catch (err) {
       runStatus = "";
       hideApproval(null);
@@ -314,7 +405,9 @@ export function buildPrompt(onHeightChange: () => void): ViewHost {
         renderedCount = count;
         clear(log);
         for (const m of State.chatHistory) log.append(bubble(m));
-        if (thinking) log.append(typingDots(runStatus));
+        if (thinking && streamText.trim()) {
+          log.append(h("div", { class: "chat-row" }, h("div", { class: "reply streaming", text: plain(streamText), dir: "auto" })));
+        } else if (thinking) log.append(typingDots(runStatus));
         log.scrollTop = log.scrollHeight;
       }
 

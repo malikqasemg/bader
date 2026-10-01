@@ -17,9 +17,57 @@ import sys
 sys.path.insert(0, os.getcwd())
 
 
+_SERVE = {"on": False, "out": None}
+
+
 def _emit(obj):
+    if _SERVE["on"]:
+        # Worker mode: one tagged line per answer (library chatter goes elsewhere).
+        _SERVE["out"].write("@@" + json.dumps(obj, ensure_ascii=False) + "\n")
+        _SERVE["out"].flush()
+        return
     sys.stdout.write("\n" + json.dumps(obj, ensure_ascii=False) + "\n")
     sys.stdout.flush()
+
+
+def serve():
+    """Long-lived worker: one JSON request per stdin line, one "@@" answer line each.
+    Keeps the speech model loaded, so each voice note skips start-up and model load."""
+    _SERVE["on"] = True
+    _SERVE["out"] = os.fdopen(os.dup(1), "w", encoding="utf-8")
+    sys.stdout = sys.stderr  # anything else printed must not corrupt the answer stream
+    try:  # warm up: load the speech model and voice libraries now, not on the first voice note
+        import tempfile
+        import wave
+        from tools.transcription_tools import transcribe_audio
+        import edge_tts  # noqa: F401
+        warm = os.path.join(tempfile.gettempdir(), "bader_warm.wav")
+        with wave.open(warm, "wb") as w:
+            w.setnchannels(1)
+            w.setsampwidth(2)
+            w.setframerate(16000)
+            w.writeframes(b"\x00\x00" * 8000)
+        transcribe_audio(warm)
+    except Exception:
+        pass
+    _emit({"ok": True, "ready": True})
+    for line in sys.stdin:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            req = json.loads(line)
+            op = req.get("op")
+            if op == "stt":
+                stt(req["path"])
+            elif op == "tts":
+                tts(req["text_path"], req["out"])
+            elif op == "ping":
+                _emit({"ok": True})
+            else:
+                _emit({"ok": False, "error": f"unknown op {op}"})
+        except Exception as exc:
+            _emit({"ok": False, "error": f"{type(exc).__name__}: {exc}"})
 
 
 def stt(path):
@@ -130,7 +178,9 @@ def tts(text_path, out_path):
 
 def main():
     try:
-        if len(sys.argv) >= 3 and sys.argv[1] == "stt":
+        if len(sys.argv) >= 2 and sys.argv[1] == "serve":
+            serve()
+        elif len(sys.argv) >= 3 and sys.argv[1] == "stt":
             stt(sys.argv[2])
         elif len(sys.argv) >= 4 and sys.argv[1] == "tts":
             tts(sys.argv[2], sys.argv[3])

@@ -114,6 +114,16 @@ pub async fn send(
                 json!({ "role": role, "content": content })
             })
             .collect();
+        // Quick lane first (fast model, no tools); the engine only when needed.
+        if context.is_none() {
+            if let Some(text) = crate::quick::try_answer(app, &history, &query_text).await? {
+                chat.push(json!({ "role": "user", "content": query_text }));
+                chat.push(json!({ "role": "assistant", "content": text.clone() }));
+                return Ok(ChatReply { text });
+            }
+            use tauri::Emitter;
+            let _ = app.emit_to(crate::island::WINDOW_LABEL, "bader-delta-reset", ());
+        }
         let text = crate::runs::send(app, &engine_url(), &key, SYSTEM_PROMPT, history, &query_text).await?;
         chat.push(json!({ "role": "user", "content": query_text }));
         chat.push(json!({ "role": "assistant", "content": text.clone() }));

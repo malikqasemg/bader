@@ -74,6 +74,15 @@ export function aiSection(status: EngineStatus): HTMLElement {
     value: status.values["model.default"] ?? "",
     style: "flex:1 1 auto;min-width:0",
   }) as HTMLInputElement;
+  const quick = h("input", { type: "checkbox" }) as HTMLInputElement;
+  quick.checked = (status.values["bader.quick_lane"] ?? "true") !== "false";
+  const quickModel = h("input", {
+    type: "text",
+    spellcheck: "false",
+    value: status.values["bader.quick_model"] ?? "",
+    placeholder: "default: anthropic/claude-haiku-4.5",
+    style: "flex:1 1 auto;min-width:0",
+  }) as HTMLInputElement;
   const state = h("span", { class: "hint" });
   const head = dot(false);
   const feedback = h("div", {});
@@ -102,6 +111,8 @@ export function aiSection(status: EngineStatus): HTMLElement {
     const values: Record<string, string> = {
       "model.provider": provider.value,
       "model.base_url": p.baseUrl,
+      "bader.quick_lane": quick.checked ? "true" : "false",
+      "bader.quick_model": quickModel.value.trim(),
     };
     if (model.value.trim()) values["model.default"] = model.value.trim();
     const secrets: Record<string, string> = {};
@@ -137,6 +148,9 @@ export function aiSection(status: EngineStatus): HTMLElement {
     h("div", { class: "row" }, h("label", { text: "Provider" }), provider),
     h("div", { class: "row" }, h("label", { text: "API key" }), key),
     h("div", { class: "row" }, h("label", { text: "Model" }), model),
+    h("div", { class: "row" }, h("label", { text: "Quick answers" }), quick),
+    h("div", { class: "row" }, h("label", { text: "Quick model" }), quickModel),
+    h("span", { class: "hint", text: "Quick answers: a fast model replies in 2–3 s; Bader's full engine takes over only when tools or actions are needed." }),
     h("div", { class: "row" }, apply),
     feedback,
   );

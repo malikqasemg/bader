@@ -11,6 +11,7 @@ mod island;
 mod log;
 #[cfg(windows)]
 mod pipe;
+mod quick;
 mod runs;
 mod sync;
 #[cfg(not(windows))]
@@ -412,6 +413,7 @@ async fn engine_apply(
 ) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || {
         engine::apply(values, secrets)?;
+        voice::restart_worker();
         if restart {
             engine::restart()?;
         }
@@ -608,6 +610,7 @@ pub fn run() {
             tray::build(&handle)?;
             app.manage(face::Face::start(handle.clone()));
             sync::start(handle.clone());
+            voice::prewarm(handle.clone());
             // Before the island: see create_settings_window.
             create_settings_window(&handle);
 

@@ -71,7 +71,7 @@ fn wants_snapshot(query: &str) -> bool {
     MAIL_WORDS.iter().any(|w| q.contains(w))
 }
 
-fn snapshot_text() -> Option<String> {
+pub fn snapshot_text() -> Option<String> {
     let raw = std::fs::read_to_string(crate::engine::home().join("bader_inbox.json")).ok()?;
     let v: Value = serde_json::from_str(&raw).ok()?;
     let mut out = format!(
@@ -182,6 +182,11 @@ pub async fn send(
                         let tool = ev.get("tool").and_then(Value::as_str).map(str::to_string);
                         let preview = ev.get("preview").and_then(Value::as_str).map(|s| s.chars().take(120).collect());
                         emit(app, "tool", tool, preview);
+                    }
+                    "message.delta" => {
+                        if let Some(d) = ev.get("delta").and_then(Value::as_str) {
+                            let _ = app.emit_to(WINDOW_LABEL, "bader-delta", d.to_string());
+                        }
                     }
                     "message.interim" => {
                         let text = ev.get("text").and_then(Value::as_str).map(str::to_string);
