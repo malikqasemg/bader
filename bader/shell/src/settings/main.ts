@@ -176,7 +176,9 @@ function claudeSection(status: HookStatus): HTMLElement {
 /** One stored secret: licence key or engine key. Values live in the Credential Manager. */
 function keySection(id: string, title: string, label: string, placeholder: string, missing: string, hasKey: boolean): HTMLElement {
   const dot = statusDot(hasKey);
-  const saved = "Saved in the Windows Credential Manager.";
+  const saved = navigator.userAgent.includes("Mac")
+    ? "Saved in the macOS Keychain."
+    : "Saved in the Windows Credential Manager.";
   const state = h("span", { class: "hint", text: hasKey ? saved : missing });
   const field = h("input", {
     type: "password",
