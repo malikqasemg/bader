@@ -1,0 +1,61 @@
+name: Bader shell (Windows)
+
+# Builds the Bader Windows installer from bader/shell and uploads it as a
+# workflow artifact. Runs on changes to bader/shell or by hand.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'bader/shell/**'
+      - '.github/workflows/bader-shell-windows.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: bader/shell
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: bader/shell/package-lock.json
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            bader/shell/target
+          key: bader-shell-cargo-${{ hashFiles('bader/shell/Cargo.lock') }}
+          restore-keys: bader-shell-cargo-
+
+      - name: Install dependencies
+        run: npm ci --include=dev
+
+      - name: Rust unit tests
+        run: cargo test --release -p bader
+
+      - name: Build and pack the installer
+        id: pack
+        shell: pwsh
+        run: |
+          npm run pack
+          $version = (Get-Content src-tauri/tauri.conf.json | ConvertFrom-Json).version
+          "version=$version" >> $env:GITHUB_OUTPUT
+          Get-ChildItem release | Format-Table Name, Length
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Bader-Windows-${{ steps.pack.outputs.version }}-setup
+          path: bader/shell/release/*.exe
+          if-no-files-found: error

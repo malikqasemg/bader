@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "What Bader's windows are allowed to do. Everything that touches the OS goes through Bader's own commands.",
+  "windows": ["island", "settings"],
+  "permissions": ["core:default", "autostart:default"]
+}
