@@ -6,14 +6,15 @@ shows what Bader is doing.
 
 | App state | Face | Label |
 |---|---|---|
-| idle | neutral | Ready · جاهز |
+| start-up and idle | idle | full-body Bader + "Bader" |
 | mic recording | listening | Listening · أستمع |
 | waiting for the engine | thinking | Thinking · أفكر |
 | reading the reply aloud | speaking | Speaking · أتكلم |
 | reply done | happy (3 s) | Done · تم |
 | error | concerned (6 s) | Problem · في مشكلة |
 | new message (planned) | surprised | New message · رسالة جديدة |
-| start-up | celebrating | Hello! · أهلاً |
+| greeting (spare) | celebrating | Hello! · أهلاً |
+| spare | neutral | Ready · جاهز |
 
 ## Files
 - `art/` — source expressions (1254×1254 PNG, transparent)

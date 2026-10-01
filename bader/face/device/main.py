@@ -1,7 +1,7 @@
 # Bader face — main loop for the ESP32-C6 screen.
 #
 # The Bader app sends one line per change over USB serial:
-#   FACE <name> [seconds]   show a face; after <seconds> go back to "neutral"
+#   FACE <name> [seconds]   show a face; after <seconds> go back to "idle" (full-body Bader)
 #   BL <0-100>              backlight level
 #   PING                    -> "PONG bader-face <version>"
 # Faces live in /faces/<name>.raw (172x320 RGB565).
@@ -15,7 +15,7 @@ from st7789 import Display
 
 VERSION = "1.0"
 FACES_DIR = "/faces"
-IDLE = "neutral"
+IDLE = "idle"
 
 d = Display()
 available = set(f[:-4] for f in os.listdir(FACES_DIR) if f.endswith(".raw"))
@@ -63,8 +63,7 @@ def main():
     global revert_at
     d.fill(0x0000)
     d.backlight(0.9)
-    show("celebrating" if "celebrating" in available else IDLE)
-    revert_at = time.ticks_add(time.ticks_ms(), 2500)
+    show(IDLE if IDLE in available else "neutral")
     poll = select.poll()
     poll.register(sys.stdin, select.POLLIN)
     buf = ""
@@ -81,7 +80,7 @@ def main():
                     buf = ""
         if revert_at and time.ticks_diff(time.ticks_ms(), revert_at) >= 0:
             revert_at = 0
-            show(IDLE)
+            show(IDLE if IDLE in available else "neutral")
 
 
 main()

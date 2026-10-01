@@ -21,7 +21,7 @@ async function call<T>(cmd: string, args?: Record<string, unknown>): Promise<T |
 }
 
 export type FaceName =
-  | "neutral" | "listening" | "thinking" | "speaking"
+  | "idle" | "neutral" | "listening" | "thinking" | "speaking"
   | "happy" | "concerned" | "surprised" | "celebrating";
 
 export interface AccountsStatus {
@@ -121,7 +121,7 @@ export const Bridge = {
   secretClear: (key: string) => callOrThrow<void>("secret_clear", { key }),
 
   // ── Face screen (ESP32 on USB) ────────────────────────────────────────────
-  /** Shows a face on Bader's USB screen; with seconds, it returns to "neutral". */
+  /** Shows a face on Bader's USB screen; with seconds, it returns to "idle". */
   face: (name: FaceName, seconds?: number) => call<void>("face_set", { name, seconds: seconds ?? null }),
 
   // ── Voice (mic in the island) ─────────────────────────────────────────────

@@ -20,6 +20,7 @@ GREY = (150, 160, 170)
 
 # expression file -> (English, Arabic, accent colour)
 FACES = {
+    "idle": None,  # full-body Bader, shown at start and when doing nothing
     "neutral": ("Ready", "جاهز", GREY),
     "listening": ("Listening", "أستمع", CYAN),
     "thinking": ("Thinking", "أفكر", (255, 196, 64)),
@@ -57,14 +58,38 @@ def rgb565(img):
     return bytes(out)
 
 
+def build_idle(src, out_dir, name, en_f, ar_f):
+    """Full-body Bader, as large as fits, with his name under it."""
+    body = Image.open(src).convert("RGBA")
+    body = body.crop(body.getbbox())
+    box_w, box_h = W - 4, 250
+    scale = min(box_w / body.width, box_h / body.height)
+    body = body.resize((int(body.width * scale), int(body.height * scale)), Image.LANCZOS)
+    canvas = Image.new("RGB", (W, H), BG)
+    canvas.paste(body, ((W - body.width) // 2, 12 + (box_h - body.height) // 2), body)
+    d = ImageDraw.Draw(canvas)
+    y = 274
+    for text, f, colour in (("Bader", en_f, (235, 238, 242)),):
+        tw = d.textlength(text, font=f)
+        d.text(((W - tw) / 2, y), text, font=f, fill=colour)
+    canvas.save(os.path.join(out_dir, f"{name}.png"))
+    with open(os.path.join(out_dir, f"{name}.raw"), "wb") as fh:
+        fh.write(rgb565(canvas))
+    print("built", name)
+
+
 def build(src_dir, out_dir):
     os.makedirs(out_dir, exist_ok=True)
     en_f, ar_f = font(EN_FONT, 24), font(AR_FONT, 28)
-    for name, (en, arabic, accent) in FACES.items():
+    for name, spec in FACES.items():
         src = os.path.join(src_dir, f"{name}.png")
         if not os.path.isfile(src):
             print("missing", src)
             continue
+        if spec is None:
+            build_idle(src, out_dir, name, en_f, ar_f)
+            continue
+        en, arabic, accent = spec
         head = Image.open(src).convert("RGBA")
         head = head.crop(head.getbbox())
         scale = (W - 8) / head.width

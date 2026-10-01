@@ -86,7 +86,7 @@ export function buildPrompt(onHeightChange: () => void): ViewHost {
       player.onplay = () => void Bridge.face("speaking");
       player.onended = () => void Bridge.face("happy", 3);
       player.onpause = () => {
-        if (player && !player.ended) void Bridge.face("neutral");
+        if (player && !player.ended) void Bridge.face("idle");
       };
       void player.play();
     } catch (err) {
