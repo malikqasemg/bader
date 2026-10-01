@@ -9,6 +9,8 @@ const SERVICE: &str = "io.inetgenius.bader";
 pub const KNOWN_KEYS: &[&str] = &[
     "bader-engine-key",
     "bader-license-key",
+    "outlook-connected",
+    "webex-connected",
     "anthropic-api-key",
     "n8n-url",
     "n8n-api-key",

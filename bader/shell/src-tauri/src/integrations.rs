@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 // Integration pollers — the Rust side of StripePoller / GithubPoller /
 // VercelPoller / N8nPoller / ResendPoller / NotionPoller / CalcomPoller.
 //
@@ -61,15 +62,10 @@ pub fn set_paused(on: bool) {
 }
 
 /// Spawns every poller with the macOS delays and intervals.
-pub fn start(app: AppHandle) {
-    spawn(app.clone(), "integration_n8n", 3, 15, poll_n8n);
-    spawn(app.clone(), "integration_vercel", 5, 30, poll_vercel);
-    spawn(app.clone(), "integration_stripe", 6, 30, poll_stripe);
-    spawn(app.clone(), "integration_resend", 6, 60, poll_resend);
-    spawn(app.clone(), "integration_github", 7, 300, poll_github);
-    spawn(app.clone(), "integration_calcom", 8, 300, poll_calcom);
-    spawn(app, "integration_notion", 9, 300, poll_notion);
-}
+/// Bader's connectors (Outlook, Webex) are fed by the engine, not polled from
+/// the shell. The original pollers (n8n, Vercel, Stripe, …) are kept below as
+/// reference for the engine-driven feed and are not started.
+pub fn start(_app: AppHandle) {}
 
 /// True when the user has this integration switched on in settings.
 fn enabled(app: &AppHandle, id: &str) -> bool {

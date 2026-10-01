@@ -7,15 +7,10 @@ import { Sound } from "../core/sound";
 import { State } from "../core/state";
 import type { Island } from "./island";
 
-/** Which Credential Manager key backs each pill. */
+/** Which stored secret marks each connector as connected (set by the engine sign-in). */
 const KEY_FOR: Record<string, string> = {
-  integration_stripe: "stripe-api-key",
-  integration_github: "github-token",
-  integration_vercel: "vercel-token",
-  integration_n8n: "n8n-api-key",
-  integration_resend: "resend-api-key",
-  integration_notion: "notion-api-key",
-  integration_calcom: "calcom-api-key",
+  integration_outlook: "outlook-connected",
+  integration_webex: "webex-connected",
 };
 
 const clearTimers = new Map<string, number>();
@@ -32,11 +27,6 @@ export async function refreshConfigured() {
     const info = State.integrations[id] ?? { data: {}, error: null, loaded: false, configured: false };
     State.integrations[id] = { ...info, configured: present };
   }
-  const hooks = State.settings.hooksInstalled;
-  const claude = State.integrations.integration_claude ?? {
-    data: {}, error: null, loaded: false, configured: false,
-  };
-  State.integrations.integration_claude = { ...claude, configured: hooks };
   State.notify();
 }
 

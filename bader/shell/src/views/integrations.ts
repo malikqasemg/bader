@@ -45,6 +45,8 @@ function arr(id: string, key: string): Record<string, unknown>[] {
 // ── Not configured / idle ─────────────────────────────────────────────────────
 
 const OPEN_URLS: Record<string, string> = {
+  integration_outlook: "https://outlook.office.com/mail/",
+  integration_webex: "https://web.webex.com/",
   integration_resend: "https://resend.com/emails",
   integration_vercel: "https://vercel.com/dashboard",
   integration_github: "https://github.com",
@@ -59,7 +61,7 @@ function idleCard(task: AgentTask, openSettings: () => void): HTMLElement {
   const error = info?.error ?? null;
   // The Claude Code pill is about hooks, not a key — the macOS wording would be
   // misleading here.
-  const missing = task.id === "integration_claude" ? "Hooks not installed" : "Key not configured";
+  const missing = "Not connected yet";
   const label = error ?? (configured ? "Connected · loading…" : missing);
   const statusColor = error || !configured ? "#F4505E" : "#22C55E";
 
@@ -110,7 +112,7 @@ function idleCard(task: AgentTask, openSettings: () => void): HTMLElement {
   return h(
     "div",
     { class: "int-card" },
-    header(task.color, task.id === "integration_claude" ? "VS Code" : task.name, "Integration"),
+    header(task.color, task.name, "Connector"),
     h("div", { class: "int-status" }, dot(statusColor, 5), h("span", { text: label })),
     actions,
   );
