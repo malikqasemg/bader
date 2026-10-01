@@ -64,6 +64,7 @@ fn gsetup(args: &[&str]) -> Result<(bool, String), String> {
     cmd.arg(&script)
         .args(args)
         .current_dir(&root)
+        .env("PYTHONPATH", &root)
         .env("HERMES_HOME", crate::engine::home())
         .stdin(Stdio::null());
     #[cfg(windows)]
