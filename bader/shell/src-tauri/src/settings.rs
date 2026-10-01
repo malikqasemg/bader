@@ -49,18 +49,39 @@ impl Default for Settings {
 
 /// %APPDATA%\Bader
 pub fn config_dir() -> PathBuf {
-    let base = std::env::var_os("APPDATA")
+    #[cfg(not(windows))]
+    return mac_dir();
+    #[cfg(windows)]
+    {
+        let base = std::env::var_os("APPDATA")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| PathBuf::from("."));
+        base.join("Bader")
+    }
+}
+
+/// ~/Library/Application Support/Bader on macOS (config, log and inbox together).
+#[cfg(not(windows))]
+fn mac_dir() -> PathBuf {
+    std::env::var_os("HOME")
         .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from("."));
-    base.join("Bader")
+        .unwrap_or_else(|| PathBuf::from("/tmp"))
+        .join("Library")
+        .join("Application Support")
+        .join("Bader")
 }
 
 /// %LOCALAPPDATA%\Bader — where bader-hook.exe and the log live.
 pub fn local_dir() -> PathBuf {
-    let base = std::env::var_os("LOCALAPPDATA")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from("."));
-    base.join("Bader")
+    #[cfg(not(windows))]
+    return mac_dir();
+    #[cfg(windows)]
+    {
+        let base = std::env::var_os("LOCALAPPDATA")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| PathBuf::from("."));
+        base.join("Bader")
+    }
 }
 
 pub fn hook_exe_path() -> PathBuf {

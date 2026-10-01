@@ -14,7 +14,6 @@ use std::path::{Path, PathBuf};
 use serde::Serialize;
 use serde_json::{json, Map, Value};
 use tauri::{AppHandle, Manager};
-use windows::Win32::System::SystemInformation::GetLocalTime;
 
 use crate::settings;
 
@@ -197,11 +196,8 @@ fn pretty(v: &Value) -> String {
 /// Down to the second: installing then uninstalling in the same minute must not
 /// quietly overwrite the first backup.
 fn stamp() -> String {
-    let t = unsafe { GetLocalTime() };
-    format!(
-        "{:04}{:02}{:02}-{:02}{:02}{:02}",
-        t.wYear, t.wMonth, t.wDay, t.wHour, t.wMinute, t.wSecond
-    )
+    let (y, mo, d, h, mi, se) = crate::log::now_parts();
+    format!("{y:04}{mo:02}{d:02}-{h:02}{mi:02}{se:02}")
 }
 
 fn backup_path() -> PathBuf {

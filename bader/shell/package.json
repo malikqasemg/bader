@@ -10,7 +10,10 @@
     "tauri": "tauri",
     "predev": "cargo build --release -p bader-hook",
     "prebuild": "cargo build --release -p bader-hook",
-    "pack": "tauri build && node scripts/pack.mjs"
+    "pack": "tauri build && node scripts/pack.mjs",
+    "dev:web": "vite",
+    "build:web": "tsc --noEmit && vite build",
+    "mac": "tauri build --bundles app,dmg"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2",

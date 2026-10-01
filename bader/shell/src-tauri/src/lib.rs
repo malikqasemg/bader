@@ -6,13 +6,21 @@ mod hooks;
 mod integrations;
 mod island;
 mod log;
+#[cfg(windows)]
+mod pipe;
+#[cfg(not(windows))]
+#[path = "pipe_stub.rs"]
 mod pipe;
 mod secrets;
 mod settings;
 mod tray;
+#[cfg(windows)]
 mod win_user;
 
+#[cfg(windows)]
 use std::os::windows::process::CommandExt;
+#[cfg(not(windows))]
+use no_window::CommandExt;
 use std::process::Command;
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex};
@@ -126,10 +134,13 @@ fn open_url(url: String) {
     if !(url.starts_with("http://") || url.starts_with("https://")) {
         return;
     }
+    #[cfg(windows)]
     let _ = Command::new("rundll32.exe")
         .args(["url.dll,FileProtocolHandler", &url])
         .creation_flags(CREATE_NO_WINDOW)
         .spawn();
+    #[cfg(not(windows))]
+    let _ = Command::new("open").arg(&url).spawn();
 }
 
 /// "Open terminal" opens the working folder in VS Code when `code` is on PATH,
@@ -150,7 +161,10 @@ fn open_in_vscode(path: Option<String>) -> bool {
         }
     }
     if let Some(p) = path.as_deref().filter(|p| !p.is_empty()) {
+        #[cfg(windows)]
         let _ = Command::new("explorer").arg(p).spawn();
+        #[cfg(not(windows))]
+        let _ = Command::new("open").arg(p).spawn();
     }
     false
 }
@@ -410,12 +424,18 @@ pub fn run() {
         ])
         .setup(move |app| {
             let handle = app.handle().clone();
+            // macOS: live in the menu bar only, no Dock icon.
+            #[cfg(target_os = "macos")]
+            app.set_activation_policy(tauri::ActivationPolicy::Accessory);
             tray::build(&handle)?;
             // Before the island: see create_settings_window.
             create_settings_window(&handle);
 
             if let Some(win) = island::window(&handle) {
                 island::make_non_activating(&win);
+                // macOS: show on every Space, including full-screen apps.
+                #[cfg(target_os = "macos")]
+                island::float_everywhere(&win);
                 island::apply_geometry(&handle, &loaded.screen, false);
                 let _ = win.show();
             }
@@ -431,4 +451,18 @@ pub fn run() {
         })
         .run(tauri::generate_context!())
         .expect("error while running Bader");
+}
+
+/// `creation_flags` is Windows-only; elsewhere it is a no-op so the same
+/// spawn code compiles on macOS.
+#[cfg(not(windows))]
+mod no_window {
+    pub trait CommandExt {
+        fn creation_flags(&mut self, _flags: u32) -> &mut Self;
+    }
+    impl CommandExt for std::process::Command {
+        fn creation_flags(&mut self, _flags: u32) -> &mut Self {
+            self
+        }
+    }
 }
