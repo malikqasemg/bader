@@ -145,6 +145,7 @@ export const Bridge = {
   /** "once" approves what Bader is waiting on, "deny" refuses it. */
   runApprove: (choice: "once" | "deny") => callOrThrow<boolean>("run_approve", { choice }),
   snapshotInfo: () => call<SnapshotInfo>("snapshot_info"),
+  notify: (title: string, body: string) => call<void>("notify", { title, body }),
   syncNow: () => call<SnapshotInfo>("sync_now"),
 
   // ── Voice (mic in the island) ─────────────────────────────────────────────

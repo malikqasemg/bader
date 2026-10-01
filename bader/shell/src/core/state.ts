@@ -134,6 +134,8 @@ class AppState {
   integrations: Record<string, IntegrationInfo> = {};
 
   lastActivity = performance.now();
+  /** The chat says the island must stay open (typing, waiting, talking, reading). */
+  chatHold: () => boolean = () => false;
 
   settings: Settings = { ...DEFAULT_SETTINGS };
 

@@ -15,6 +15,8 @@ async function main() {
   void Sound.preload();
 
   const island = new Island(root);
+  island.fsm.holdOpen = () => State.chatHold();
+  window.addEventListener("bader-open-chat", () => island.openChat());
 
   const boot = await Bridge.boot();
   if (boot) {

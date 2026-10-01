@@ -299,6 +299,31 @@ export function buildPrompt(onHeightChange: () => void): ViewHost {
   }
   mic.addEventListener("click", () => void toggleMic());
 
+  // ── Keep the island open while typing, waiting, talking or reading ──
+  let readUntil = 0;
+  State.chatHold = () =>
+    sending || recording || listening || playing ||
+    (document.activeElement === input && input.value.trim() !== "") ||
+    performance.now() < readUntil;
+
+  // ── Push-to-talk: hold Control+Option (Mac) / Ctrl+Alt (Windows) ──
+  let pttStarted = false;
+  void onEvent<string>("ptt", (kind) => {
+    if (kind === "down") {
+      window.dispatchEvent(new Event("bader-open-chat"));
+      if (!recording) {
+        pttStarted = true;
+        void toggleMic();
+      }
+    } else if (kind === "up") {
+      if (pttStarted && recording) void toggleMic();
+      pttStarted = false;
+    } else if (kind === "tap") {
+      window.dispatchEvent(new Event("bader-open-chat"));
+      void toggleMic();
+    }
+  });
+
   // ── Look: the next question carries a screenshot of the screen. ──
   let looking = false;
   look.addEventListener("click", () => {
@@ -340,6 +365,12 @@ export function buildPrompt(onHeightChange: () => void): ViewHost {
 
     try {
       const reply = await Bridge.chatSend(query, context);
+      readUntil = performance.now() + 30_000;
+      if (State.mode !== "expanded" || !document.hasFocus()) {
+        const first = plain(reply.text).replace(/\s+/g, " ").trim();
+        void Bridge.notify("Bader", first.length > 140 ? first.slice(0, 137) + "…" : first).catch(() => {});
+      }
+      window.dispatchEvent(new Event("bader-open-chat"));
       State.chatHistory.push({ id: nextId++, role: "assistant", content: reply.text });
       State.stateOverride = null;
       Sound.play("finish");

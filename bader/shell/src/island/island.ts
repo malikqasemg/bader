@@ -34,6 +34,11 @@ const modeOrder = (m: IslandMode) => (m === "hidden" ? 0 : m === "compact" ? 1 :
 
 export class Island {
   readonly fsm = new IslandStateMachine();
+  /** Open on the chat (push-to-talk, answer ready). */
+  openChat() {
+    if (State.mode === "expanded" && State.view === "prompt") return;
+    this.alert("prompt");
+  }
 
   private root: HTMLElement;
   private islandEl!: HTMLElement;
@@ -581,7 +586,7 @@ export class Island {
     }
     if (!inIsland && this.wasInIsland) {
       this.fsm.mouseLeft();
-      if (this.fsm.state === "home" && !State.isPinned) {
+      if (this.fsm.state === "home" && !State.isPinned && !State.chatHold()) {
         this.homeCollapseAt = performance.now() + State.settings.autoCloseInterval * 1000;
       }
     }

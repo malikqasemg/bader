@@ -6,6 +6,7 @@ mod engine;
 mod face;
 mod files;
 mod hooks;
+mod hotkey;
 mod integrations;
 mod island;
 mod log;
@@ -310,6 +311,13 @@ async fn sync_now(app: AppHandle) -> Option<sync::SnapshotInfo> {
     .flatten()
 }
 
+/// System notification ("answer ready") — shown when the island was closed.
+#[tauri::command]
+fn notify(app: tauri::AppHandle, title: String, body: String) {
+    use tauri_plugin_notification::NotificationExt;
+    let _ = app.notification().builder().title(title).body(body).show();
+}
+
 #[tauri::command]
 fn snapshot_info() -> Option<sync::SnapshotInfo> {
     sync::info()
@@ -544,6 +552,7 @@ pub fn run() {
         .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
             let _ = app.emit_to(island::WINDOW_LABEL, "tray", "open".to_string());
         }))
+        .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_autostart::init(MacosLauncher::LaunchAgent, None))
         .manage(Shared {
             settings: Mutex::new(loaded.clone()),
@@ -579,6 +588,7 @@ pub fn run() {
             run_approve,
             sync_now,
             snapshot_info,
+            notify,
             voice_stop,
             voice_cancel,
             voice_speak,
@@ -611,6 +621,7 @@ pub fn run() {
             app.manage(face::Face::start(handle.clone()));
             sync::start(handle.clone());
             voice::prewarm(handle.clone());
+            hotkey::start(handle.clone());
             // Before the island: see create_settings_window.
             create_settings_window(&handle);
 
