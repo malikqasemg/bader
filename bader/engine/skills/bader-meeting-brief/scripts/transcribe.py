@@ -14,7 +14,21 @@ import sys
 from pathlib import Path
 
 CODE = r"""
-import json, sys
+import json, os, sys
+# Meetings use a bigger, more accurate model than live voice (names and places
+# matter: "الرياض" must not become "الرياضة"). BADER_MEETING_STT overrides it.
+try:
+    from faster_whisper import WhisperModel
+    name = os.environ.get("BADER_MEETING_STT", "large-v3-turbo")
+    model = WhisperModel(name, device="auto", compute_type="int8")
+    segs, info = model.transcribe(sys.argv[1], beam_size=5, vad_filter=True)
+    text = " ".join(s.text.strip() for s in segs)
+    print(json.dumps({"transcript": text, "language": info.language}, ensure_ascii=False))
+    sys.exit(0)
+except SystemExit:
+    raise
+except Exception as e:
+    print("big model unavailable, using voice STT: %s" % e, file=sys.stderr)
 from tools.transcription_tools import transcribe_audio
 r = transcribe_audio(sys.argv[1], source="voice_mode")
 if isinstance(r, str):

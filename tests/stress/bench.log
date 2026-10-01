@@ -1,0 +1,8 @@
+minimax/minimax-m3                16.8s  700 tok    42 tok/s cost=0.00086568 via StreamLake
+minimax/minimax-m3                14.3s  700 tok    49 tok/s cost=0.00086568 via StreamLake
+anthropic/claude-haiku-4.5         8.3s  633 tok    77 tok/s cost=0.003185 via Amazon Bedrock
+anthropic/claude-haiku-4.5         8.5s  639 tok    75 tok/s cost=0.003215 via Amazon Bedrock
+anthropic/claude-sonnet-4.5       17.3s  624 tok    36 tok/s cost=0.00942 via Amazon Bedrock
+anthropic/claude-sonnet-4.5       19.2s  643 tok    33 tok/s cost=0.009705 via Amazon Bedrock
+google/gemini-2.5-flash            9.3s  700 tok    76 tok/s cost=0.0017545 via Google
+google/gemini-2.5-flash            8.9s  700 tok    79 tok/s cost=0.0017545 via Google

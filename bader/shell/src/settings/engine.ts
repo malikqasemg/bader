@@ -38,7 +38,7 @@ const PROVIDERS: Record<string, ProviderDef> = {
     envKey: "OPENROUTER_API_KEY",
     baseUrl: "https://openrouter.ai/api/v1",
     keyHint: "sk-or-...",
-    modelHint: "e.g. minimax/minimax-m3",
+    modelHint: "recommended: anthropic/claude-haiku-4.5 (fast)",
   },
   openai: {
     label: "OpenAI",

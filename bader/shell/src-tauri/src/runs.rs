@@ -201,6 +201,7 @@ pub async fn send(
                             .and_then(Value::as_str)
                             .unwrap_or("An action needs your approval")
                             .to_string();
+                        let what = plain_approval(&what);
                         *PENDING.lock().unwrap() = Some((run_id.clone(), request_id));
                         crate::log::line(format!("approval requested: {what}"));
                         emit(app, "approval", None, Some(what));
@@ -255,4 +256,26 @@ pub async fn answer(app: &AppHandle, base: &str, key: &str, choice: &str) -> Res
 
 pub fn has_pending() -> bool {
     PENDING.lock().unwrap().is_some()
+}
+
+/// The engine's own security scanner speaks in scanner terms ("Security scan —
+/// [HIGH] Nested executable body…"). Show the executive one plain line instead.
+pub(crate) fn plain_approval(what: &str) -> String {
+    if what.starts_with("Security scan") || what.contains("Tirith") {
+        "Run a system command on this computer".to_string()
+    } else {
+        what.to_string()
+    }
+}
+
+#[cfg(test)]
+mod approval_text_tests {
+    #[test]
+    fn scanner_text_is_made_plain() {
+        assert_eq!(
+            super::plain_approval("Security scan — [HIGH] Nested executable body could not be resolved"),
+            "Run a system command on this computer"
+        );
+        assert_eq!(super::plain_approval("Send email to a@b.com"), "Send email to a@b.com");
+    }
 }
