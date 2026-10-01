@@ -27,8 +27,14 @@ pub fn build(app: &AppHandle) -> tauri::Result<()> {
             }
         });
 
-    if let Some(icon) = app.default_window_icon().cloned() {
-        builder = builder.icon(icon);
+    // Bader's head in the tray / menu bar; falls back to the app icon.
+    match tauri::image::Image::from_bytes(include_bytes!("../icons/tray.png")) {
+        Ok(icon) => builder = builder.icon(icon),
+        Err(_) => {
+            if let Some(icon) = app.default_window_icon().cloned() {
+                builder = builder.icon(icon);
+            }
+        }
     }
 
     builder.build(app)?;
