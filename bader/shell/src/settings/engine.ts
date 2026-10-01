@@ -144,13 +144,22 @@ export function aiSection(status: EngineStatus): HTMLElement {
 
 // ── Voice ─────────────────────────────────────────────────────────────────────
 
-const VOICES: [string, string][] = [
-  ["en-US-AndrewMultilingualNeural", "Andrew — Arabic + English (male)"],
-  ["en-US-AvaMultilingualNeural", "Ava — Arabic + English (female)"],
-  ["ar-SA-HamedNeural", "Hamed — Saudi Arabic (male)"],
-  ["ar-SA-ZariyahNeural", "Zariyah — Saudi Arabic (female)"],
-  ["en-US-GuyNeural", "Guy — English (male)"],
-  ["en-US-AriaNeural", "Aria — English (female)"],
+const AR_VOICES: [string, string][] = [
+  ["ar-SA-HamedNeural", "Hamed — Saudi (male)"],
+  ["ar-SA-ZariyahNeural", "Zariyah — Saudi (female)"],
+  ["ar-AE-HamdanNeural", "Hamdan — Emirati (male)"],
+  ["ar-AE-FatimaNeural", "Fatima — Emirati (female)"],
+  ["ar-KW-FahedNeural", "Fahed — Kuwaiti (male)"],
+  ["ar-QA-MoazNeural", "Moaz — Qatari (male)"],
+  ["ar-EG-ShakirNeural", "Shakir — Egyptian (male)"],
+];
+
+const EN_VOICES: [string, string][] = [
+  ["en-US-AndrewMultilingualNeural", "Andrew (male)"],
+  ["en-US-AvaMultilingualNeural", "Ava (female)"],
+  ["en-US-GuyNeural", "Guy (male)"],
+  ["en-US-AriaNeural", "Aria (female)"],
+  ["en-GB-RyanNeural", "Ryan — British (male)"],
 ];
 
 export function voiceSection(status: EngineStatus): HTMLElement {
@@ -169,7 +178,8 @@ export function voiceSection(status: EngineStatus): HTMLElement {
     ],
     status.values["stt.local.model"] || "small",
   );
-  const voice = select(VOICES, status.values["tts.edge.voice"] || VOICES[0][0]);
+  const voiceAr = select(AR_VOICES, status.values["bader.voice_ar"] || AR_VOICES[0][0]);
+  const voice = select(EN_VOICES, status.values["bader.voice_en"] || status.values["tts.edge.voice"] || EN_VOICES[0][0]);
   const spoken = h("input", { type: "checkbox" }) as HTMLInputElement;
   spoken.checked = (status.values["voice.auto_tts"] ?? "false") === "true";
   const openaiKey = h("input", {
@@ -198,6 +208,8 @@ export function voiceSection(status: EngineStatus): HTMLElement {
       "stt.language": "",
       "tts.provider": "edge",
       "tts.edge.voice": voice.value,
+      "bader.voice_ar": voiceAr.value,
+      "bader.voice_en": voice.value,
       "voice.auto_tts": spoken.checked ? "true" : "false",
     };
     if (stt.value === "local") values["stt.local.model"] = size.value;
@@ -222,12 +234,13 @@ export function voiceSection(status: EngineStatus): HTMLElement {
     h("h2", {}, dot(status.found), h("span", { text: "Voice  ·  الصوت" })),
     h("span", {
       class: "hint",
-      text: "Bader understands voice notes in Arabic and English, and can answer with a voice.",
+      text: "Bader understands Arabic and English, and answers each language in a native voice.",
     }),
     h("div", { class: "row" }, h("label", { text: "Listening" }), stt),
     sizeRow,
     keyRow,
-    h("div", { class: "row" }, h("label", { text: "Bader's voice" }), voice),
+    h("div", { class: "row" }, h("label", { text: "Arabic voice" }), voiceAr),
+    h("div", { class: "row" }, h("label", { text: "English voice" }), voice),
     h("div", { class: "row" }, h("label", { text: "Spoken replies" }), spoken),
     h("div", { class: "row" }, apply),
     feedback,

@@ -12,6 +12,7 @@ use std::path::PathBuf;
 use std::process::{Command, Stdio};
 
 use serde::Serialize;
+use serde_json::Value;
 
 const PROFILE: &str = "bader";
 const HEALTH_URL: &str = "http://127.0.0.1:8642/health";
@@ -30,6 +31,9 @@ const YAML_KEYS: &[&str] = &[
     "tts.edge.voice",
     "voice.auto_tts",
 ];
+
+/// Bader's own voice choices (Arabic + English), kept in bader_voice.json.
+const VOICE_KEYS: &[&str] = &["bader.voice_ar", "bader.voice_en"];
 
 /// .env keys the settings window may write.
 const ENV_KEYS: &[&str] = &[
@@ -167,19 +171,51 @@ pub async fn status() -> EngineStatus {
         found: !config.is_empty(),
         running,
         home: dir.display().to_string(),
-        values: yaml_values(&config, YAML_KEYS),
+        values: {
+            let mut v = yaml_values(&config, YAML_KEYS);
+            let voices: Value = std::fs::read_to_string(dir.join("bader_voice.json"))
+                .ok()
+                .and_then(|t| serde_json::from_str(&t).ok())
+                .unwrap_or(Value::Null);
+            for (k, j) in [("bader.voice_ar", "ar"), ("bader.voice_en", "en")] {
+                if let Some(s) = voices.get(j).and_then(Value::as_str) {
+                    v.insert(k.to_string(), s.to_string());
+                }
+            }
+            v
+        },
         keys,
     }
 }
 
 /// Applies YAML values (through the engine CLI) and .env keys (direct write).
-pub fn apply(values: HashMap<String, String>, secrets: HashMap<String, String>) -> Result<(), String> {
+pub fn apply(mut values: HashMap<String, String>, secrets: HashMap<String, String>) -> Result<(), String> {
     for k in values.keys().chain(secrets.keys()) {
-        if !YAML_KEYS.contains(&k.as_str()) && !ENV_KEYS.contains(&k.as_str()) {
+        if !YAML_KEYS.contains(&k.as_str())
+            && !ENV_KEYS.contains(&k.as_str())
+            && !VOICE_KEYS.contains(&k.as_str())
+        {
             return Err(format!("Setting not allowed: {k}"));
         }
     }
     let dir = home();
+    let ar = values.remove("bader.voice_ar");
+    let en = values.remove("bader.voice_en");
+    if ar.is_some() || en.is_some() {
+        let path = dir.join("bader_voice.json");
+        let mut cur: Value = std::fs::read_to_string(&path)
+            .ok()
+            .and_then(|t| serde_json::from_str(&t).ok())
+            .unwrap_or_else(|| serde_json::json!({}));
+        if let Some(a) = ar {
+            cur["ar"] = Value::String(a);
+        }
+        if let Some(e) = en {
+            cur["en"] = Value::String(e);
+        }
+        std::fs::write(&path, serde_json::to_string_pretty(&cur).unwrap_or_default())
+            .map_err(|e| format!("Could not save voices: {e}"))?;
+    }
     if !secrets.is_empty() {
         let path = dir.join(".env");
         let mut text = std::fs::read_to_string(&path).unwrap_or_default();
