@@ -279,7 +279,7 @@ function drawBader(x: CanvasRenderingContext2D, p: Pose) {
   x.translate(p.x, p.y);
   x.rotate(p.tilt);
   x.scale(p.sx, p.sy);
-  drawBaderHead(x, hw * 2.6);
+  drawBaderHead(x, hw * 2.0);
   x.restore();
 }
 
