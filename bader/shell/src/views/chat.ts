@@ -232,7 +232,7 @@ export function buildPrompt(onHeightChange: () => void): ViewHost {
       return;
     }
     let cut = -1;
-    const re = /[.!?؟\n](?=\s|$)/g;
+    const re = /(?<!\d)[.!?؟](?=\s|$)|\n/g; // "1." list numbers are not sentence ends
     let m: RegExpExecArray | null;
     while ((m = re.exec(rest))) {
       if (m.index + 1 >= 24) cut = m.index + 1;

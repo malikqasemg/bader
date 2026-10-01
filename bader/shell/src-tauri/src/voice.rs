@@ -205,8 +205,11 @@ pub fn stop_and_transcribe(app: &AppHandle, rec: &Recorder) -> Result<Heard, Str
 pub fn speak(app: &AppHandle, text: &str) -> Result<String, String> {
     let dir = crate::settings::local_dir().join("voice");
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    let text_path = dir.join("reply.txt");
-    let out_path = dir.join("reply.mp3");
+    // Unique names per call: several sentences are synthesised at once.
+    static SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let n = SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let text_path = dir.join(format!("reply-{n}.txt"));
+    let out_path = dir.join(format!("reply-{n}.mp3"));
     std::fs::write(&text_path, text).map_err(|e| e.to_string())?;
     let _ = std::fs::remove_file(&out_path);
     let out = run_helper(
@@ -222,6 +225,8 @@ pub fn speak(app: &AppHandle, text: &str) -> Result<String, String> {
         .map(PathBuf::from)
         .unwrap_or(out_path);
     let bytes = std::fs::read(&file).map_err(|e| format!("No voice file: {e}"))?;
+    let _ = std::fs::remove_file(&text_path);
+    let _ = std::fs::remove_file(&file);
     let mime = match file.extension().and_then(|e| e.to_str()).unwrap_or("") {
         "ogg" | "opus" => "audio/ogg",
         "wav" => "audio/wav",
