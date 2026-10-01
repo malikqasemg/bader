@@ -7,13 +7,15 @@ Durations are estimates.
 - [x] Docs 00–05 in `docs/bader/`
 
 ## Phase 1 — Rebrand (week 1)
-- [ ] Desktop shell: port coucou's Windows Tauri app (`coucou/windows`) into `bader/shell/`;
-      replace Claude Code hooks with a client for the Hermes gateway API; new Bader icon/character
+- [x] Desktop shell: coucou Windows Tauri app ported into `bader/shell/`; Bader art; chat → Hermes
+      API server (127.0.0.1:8642); licence + engine keys in settings (2026-10-01)
+- [x] CI: `.github/workflows/bader-shell-windows.yml` builds `Bader-Windows-<v>-setup.exe` (2.1 MB)
 - [ ] Bundle Hermes engine headless inside the installer (runs as background process)
 - [ ] CLI/command name `bader` alongside `hermes` (keep `hermes` internally for upstream merges)
 - [ ] `SOUL.md` → Bader persona, Arabic + English
 - [ ] Arabic strings: review `locales/ar.yaml`, add Bader-specific keys
-- [ ] Build Windows installer from `bader/shell` (Tauri NSIS setup.exe)
+- [x] Build Windows installer from `bader/shell` (Tauri NSIS setup.exe) — v0.1.0
+- [ ] Settings + wizard in Arabic (RTL); Bader tray icon (head) instead of app icon
 
 ## Phase 2 — Licence (week 2)
 - [ ] Licence server: add `product` column + `/bader/*` endpoints to iNetBuzz `mcp-server`
