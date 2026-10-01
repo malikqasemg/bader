@@ -42,9 +42,6 @@ jobs:
       - name: Install dependencies
         run: npm ci --include=dev
 
-      - name: Rust unit tests
-        run: cargo test --release -p bader
-
       - name: Build and pack the installer
         id: pack
         shell: pwsh
@@ -53,6 +50,9 @@ jobs:
           $version = (Get-Content src-tauri/tauri.conf.json | ConvertFrom-Json).version
           "version=$version" >> $env:GITHUB_OUTPUT
           Get-ChildItem release | Format-Table Name, Length
+
+      - name: Rust unit tests
+        run: cargo test --release -p bader
 
       - uses: actions/upload-artifact@v4
         with:
