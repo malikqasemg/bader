@@ -49,6 +49,9 @@ const ENV_KEYS: &[&str] = &[
     "OPENAI_API_KEY",
     "ANTHROPIC_API_KEY",
     "VOICE_TOOLS_OPENAI_KEY",
+    // Phone access (Telegram bot) — see Settings → Phone.
+    "TELEGRAM_BOT_TOKEN",
+    "TELEGRAM_ALLOWED_USERS",
 ];
 
 #[derive(Serialize)]

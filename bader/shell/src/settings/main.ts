@@ -6,7 +6,7 @@ import "./settings.css";
 import { Bridge, onEvent, type HookStatus } from "../core/bridge";
 import { DEFAULT_SETTINGS, type Settings } from "../core/state";
 import { h, clear } from "../views/dom";
-import { aiSection, languageSection, voiceSection } from "./engine";
+import { aiSection, languageSection, phoneSection, voiceSection } from "./engine";
 import { accountsSection } from "./accounts";
 
 let settings: Settings = { ...DEFAULT_SETTINGS };
@@ -433,6 +433,7 @@ async function main() {
     aiSection(engine),
     languageSection(engine),
     voiceSection(engine),
+    phoneSection(engine),
     keySection("bader-engine-key", "Bader engine  ·  المحرك", "Engine key", "API_SERVER_KEY of the engine", "No engine key — fine for an engine on this PC without a key.", hasEngineKey),
     generalSection(),
     h("div", {

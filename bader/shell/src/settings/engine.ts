@@ -309,3 +309,71 @@ export function languageSection(status: EngineStatus): HTMLElement {
     feedback,
   );
 }
+
+// ── Phone (Telegram) ──────────────────────────────────────────────────────────
+
+/** Talk to Bader from a phone through a private Telegram bot. */
+export function phoneSection(status: EngineStatus): HTMLElement {
+  const hasToken = status.keys["TELEGRAM_BOT_TOKEN"] ?? false;
+  const hasUser = status.keys["TELEGRAM_ALLOWED_USERS"] ?? false;
+  const token = h("input", {
+    type: "password",
+    autocomplete: "off",
+    spellcheck: "false",
+    placeholder: hasToken ? "••••••••••••  (saved)" : "123456789:AA…  (from @BotFather)",
+    style: "flex:1 1 auto;min-width:0",
+  }) as HTMLInputElement;
+  const user = h("input", {
+    type: "text",
+    inputmode: "numeric",
+    spellcheck: "false",
+    placeholder: hasUser ? "(saved)" : "your Telegram user ID, e.g. 123456789",
+    style: "flex:1 1 auto;min-width:0",
+  }) as HTMLInputElement;
+  const feedback = h("div", {});
+  const apply = h("button", { class: "primary", text: "Connect & restart engine" }) as HTMLButtonElement;
+  apply.addEventListener("click", async () => {
+    const secrets: Record<string, string> = {};
+    if (token.value.trim()) secrets["TELEGRAM_BOT_TOKEN"] = token.value.trim();
+    const ids = user.value.replace(/\s+/g, "");
+    if (ids) {
+      if (!/^\d+(,\d+)*$/.test(ids)) {
+        notice(feedback, false, "The user ID is digits only (several IDs: separate with commas).");
+        return;
+      }
+      secrets["TELEGRAM_ALLOWED_USERS"] = ids;
+    }
+    if (!Object.keys(secrets).length) {
+      notice(feedback, false, "Nothing to save.");
+      return;
+    }
+    if (!hasUser && !secrets["TELEGRAM_ALLOWED_USERS"]) {
+      notice(feedback, false, "Add your Telegram user ID too — without it nobody is allowed to talk to the bot.");
+      return;
+    }
+    apply.disabled = true;
+    notice(feedback, true, "Saving…");
+    try {
+      await Bridge.engineApply({}, secrets, true);
+      token.value = "";
+      notice(feedback, true, "Saved. Open your bot in Telegram and send it a message.");
+    } catch (err) {
+      notice(feedback, false, `Could not save: ${String(err)}`);
+    } finally {
+      apply.disabled = false;
+    }
+  });
+  return h(
+    "section",
+    {},
+    h("h2", {}, dot(hasToken && hasUser), h("span", { text: "Phone (Telegram)  ·  الهاتف" })),
+    h("span", {
+      class: "hint",
+      text: "Chat with Bader from your phone. 1) In Telegram, message @BotFather → /newbot → copy the token. 2) Message @userinfobot → copy your ID. 3) Paste both here. Only the IDs you list can talk to Bader.",
+    }),
+    h("div", { class: "row" }, h("label", { text: "Bot token" }), token),
+    h("div", { class: "row" }, h("label", { text: "Your user ID" }), user),
+    h("div", { class: "row" }, apply),
+    feedback,
+  );
+}
