@@ -25,7 +25,8 @@ QUICK_RULES = (pathlib.Path(__file__).parents[2] / "bader/shell/src-tauri/src/qu
 QUICK_RULES = QUICK_RULES.split('const RULES: &str = "', 1)[1].split('";', 1)[0].replace("\\\n", "")
 
 MAIL_WORDS = ["mail", "email", "inbox", "meeting", "calendar", "schedule", "today",
-              "بريد", "ايميل", "إيميل", "رسائل", "رسالة", "اجتماع", "اجتماعات", "موعد", "مواعيد", "اليوم", "جدول"]
+              "بريد", "ايميل", "إيميل", "رسائل", "رسالة", "اجتماع", "اجتماعات", "موعد", "مواعيد", "اليوم", "جدول",
+              "yesterday", "last time", "earlier", "previous", "remember", "transcript", "أمس", "سابق", "تذكر"]
 
 
 def snapshot():

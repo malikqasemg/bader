@@ -64,6 +64,9 @@ const MAIL_WORDS: &[&str] = &[
     "today", "tomorrow", "brief", "unread", "who wrote", "who sent",
     "بريد", "ايميل", "إيميل", "إيميلات", "ايميلات", "رسائل", "رسالة", "اجتماع", "اجتماعات",
     "تقويم", "جدول", "اليوم", "بكرة", "غدا", "غداً", "موعد", "مواعيد", "ملخص", "لخص",
+    // Recall of earlier work — the snapshot also carries the history of asks.
+    "yesterday", "last time", "earlier", "previous", "remember", "before", "last week", "transcript",
+    "أمس", "امس", "سابق", "تذكر", "تتذكر", "قبل", "الماضي",
 ];
 
 fn wants_snapshot(query: &str) -> bool {
@@ -89,6 +92,20 @@ pub fn snapshot_text() -> Option<String> {
                 e.get("start").and_then(Value::as_str).unwrap_or(""),
                 e.get("end").and_then(Value::as_str).unwrap_or(""),
                 e.get("title").and_then(Value::as_str).unwrap_or("")
+            ));
+        }
+    }
+    if let Some(items) = v.get("history").and_then(Value::as_array) {
+        if !items.is_empty() {
+            out.push_str("Earlier asks and what Bader answered (all channels, newest first; for full detail use session_search):\n");
+        }
+        for h in items {
+            out.push_str(&format!(
+                "- {} [{}] asked: {} → {}\n",
+                h.get("when").and_then(Value::as_str).unwrap_or(""),
+                h.get("channel").and_then(Value::as_str).unwrap_or(""),
+                h.get("ask").and_then(Value::as_str).unwrap_or(""),
+                h.get("answer").and_then(Value::as_str).unwrap_or("")
             ));
         }
     }
@@ -277,5 +294,23 @@ mod approval_text_tests {
             "Run a system command on this computer"
         );
         assert_eq!(super::plain_approval("Send email to a@b.com"), "Send email to a@b.com");
+    }
+}
+
+/// Quick-lane turns never reach the engine, so they are journalled here; the
+/// background sync merges them with the engine's own history (Telegram, tools).
+pub fn journal(ask: &str, answer: &str) {
+    use std::io::Write;
+    let ts = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    let line = json!({ "ts": ts, "channel": "island", "ask": ask, "answer": answer });
+    if let Ok(mut f) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(crate::engine::home().join("bader_journal.jsonl"))
+    {
+        let _ = writeln!(f, "{line}");
     }
 }

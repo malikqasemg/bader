@@ -119,6 +119,7 @@ pub async fn send(
             if let Some(text) = crate::quick::try_answer(app, &history, &query_text).await? {
                 chat.push(json!({ "role": "user", "content": query_text }));
                 chat.push(json!({ "role": "assistant", "content": text.clone() }));
+                crate::runs::journal(&query_text, &text);
                 return Ok(ChatReply { text });
             }
             use tauri::Emitter;

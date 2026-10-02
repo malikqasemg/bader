@@ -21,7 +21,7 @@ creating or changing calendar events; making or editing files or documents (Word
 searching the internet or opening websites; reading files; running commands; using the computer or browser; \
 transcribing recordings; setting reminders or remembering something for later; or any fact that is not in this prompt \
 and not stable general knowledge (news, prices, weather, anything recent) — reply with exactly [[ENGINE]] and nothing else. \
-Otherwise answer from the snapshot below and general knowledge. Never invent emails, meetings, names, numbers or dates.";
+If the user refers to an earlier conversation, task, file or meeting ('yesterday', 'the transcript I shared', 'last time') answer from the 'Earlier asks' list below when it holds enough detail; if it does not, reply [[ENGINE]]. Otherwise answer from the snapshot below and general knowledge. Never invent emails, meetings, names, numbers or dates.";
 
 /// Endpoint, key and model for the quick lane, from the engine's own settings.
 fn lane() -> Option<(String, String, String)> {
@@ -78,9 +78,48 @@ fn yaml_value(text: &str, path: &str) -> Option<String> {
     None
 }
 
-fn now_line() -> String {
+/// Local date parts. `log::now_parts` is UTC on macOS/Linux, so ask `date` there.
+fn local_parts() -> (u32, u32, u32, u32, u32) {
+    #[cfg(not(windows))]
+    if let Ok(out) = std::process::Command::new("date").arg("+%Y %m %d %H %M").output() {
+        let v: Vec<u32> = String::from_utf8_lossy(&out.stdout)
+            .split_whitespace()
+            .filter_map(|p| p.parse().ok())
+            .collect();
+        if v.len() == 5 {
+            return (v[0], v[1], v[2], v[3], v[4]);
+        }
+    }
     let (y, mo, d, h, mi, _) = crate::log::now_parts();
-    format!("Now (user's computer clock): {y:04}-{mo:02}-{d:02} {h:02}:{mi:02}.")
+    (y, mo, d, h, mi)
+}
+
+const DAYS: [&str; 7] = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+/// Days since 1970-01-01 for a civil date (Howard Hinnant).
+fn days_from_civil(y: i64, m: i64, d: i64) -> i64 {
+    let y = if m <= 2 { y - 1 } else { y };
+    let era = y.div_euclid(400);
+    let yoe = y - era * 400;
+    let doy = (153 * (if m > 2 { m - 3 } else { m + 9 }) + 2) / 5 + d - 1;
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    era * 146_097 + doe - 719_468
+}
+
+fn weekday(y: u32, m: u32, d: u32) -> &'static str {
+    // 1970-01-01 was a Thursday (index 4).
+    DAYS[(days_from_civil(y as i64, m as i64, d as i64) + 4).rem_euclid(7) as usize]
+}
+
+/// Today with its weekday, so "yesterday" / "3 days ago" are counted from the right day.
+fn now_line() -> String {
+    let (y, mo, d, h, mi) = local_parts();
+    let today = weekday(y, mo, d);
+    let yesterday = DAYS[(DAYS.iter().position(|x| *x == today).unwrap_or(0) + 6) % 7];
+    format!(
+        "Now (user's local time): {today} {y:04}-{mo:02}-{d:02} {h:02}:{mi:02}. Yesterday was {yesterday}. \
+Count 'N days ago' from this date; convert other time zones to local time before comparing days."
+    )
 }
 
 /// Tries the quick lane. Ok(Some(text)) = answered; Ok(None) = hand to the engine.
@@ -180,5 +219,15 @@ mod tests {
         let y = "model:\n  default: minimax/minimax-m3\n  provider: openrouter\n  base_url: 'https://openrouter.ai/api/v1'\nother:\n  provider: x\n";
         assert_eq!(super::yaml_value(y, "model.provider").as_deref(), Some("openrouter"));
         assert_eq!(super::yaml_value(y, "model.base_url").as_deref(), Some("https://openrouter.ai/api/v1"));
+    }
+}
+
+#[cfg(test)]
+mod date_tests {
+    #[test]
+    fn weekday_is_right() {
+        assert_eq!(super::weekday(2026, 10, 2), "Friday");
+        assert_eq!(super::weekday(1970, 1, 1), "Thursday");
+        assert_eq!(super::weekday(2024, 2, 29), "Thursday");
     }
 }

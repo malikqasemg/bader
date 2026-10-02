@@ -88,10 +88,61 @@ def calendar():
     return events
 
 
+def history(days=7, limit=60):
+    """What the user asked and what Bader answered, across every channel."""
+    import sqlite3
+    import time
+    since = time.time() - days * 86400
+    items = []
+    db_path = os.path.join(HOME, "state.db")
+    if os.path.isfile(db_path):
+        db = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True, timeout=5)
+        rows = db.execute(
+            "select m.session_id, s.source, m.role, m.content, m.timestamp from messages m "
+            "join sessions s on s.id = m.session_id "
+            "where m.timestamp > ? and m.role in ('user','assistant') order by m.session_id, m.id", (since,)
+        ).fetchall()
+        db.close()
+        cur = None
+        for sid, source, role, content, ts in rows:
+            text = content if isinstance(content, str) else ""
+            if role == "user":
+                if cur:
+                    items.append(cur)
+                cur = {"sid": sid, "ts": ts, "channel": "island" if source == "api_server" else source,
+                       "ask": text, "answer": ""}
+            elif cur and cur["sid"] == sid and text.strip():
+                cur["answer"] = text  # the last assistant text of the turn is the answer
+        if cur:
+            items.append(cur)
+    try:
+        with open(os.path.join(HOME, "bader_journal.jsonl"), encoding="utf-8") as f:
+            for line in f:
+                try:
+                    j = json.loads(line)
+                except ValueError:
+                    continue
+                if j.get("ts", 0) > since:
+                    items.append(j)
+    except OSError:
+        pass
+    items.sort(key=lambda i: i.get("ts") or 0, reverse=True)
+    out = []
+    for i in items[:limit]:
+        ask = re.sub(r"\[Reply in [^\]]*\]|\[أجب[^\]]*\]", "", i.get("ask") or "")
+        out.append({
+            "when": dt.datetime.fromtimestamp(i["ts"]).astimezone().strftime("%a %Y-%m-%d %H:%M"),
+            "channel": i.get("channel") or "",
+            "ask": _clean(ask, 160),
+            "answer": _clean(i.get("answer"), 260),
+        })
+    return out
+
+
 def main():
     result = {"updated": dt.datetime.now().astimezone().isoformat(timespec="minutes")}
     errors = []
-    for key, fn in (("gmail", gmail), ("calendar", calendar)):
+    for key, fn in (("history", history), ("calendar", calendar), ("gmail", gmail)):
         try:
             data = fn()
             if data is not None:
