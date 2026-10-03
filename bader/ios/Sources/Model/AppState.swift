@@ -21,6 +21,7 @@ final class AppState: ObservableObject {
     @Published var approval: Approval?
     @Published var unread: Int?
     @Published var speak = Prefs.speak { didSet { Prefs.speak = speak } }
+    @Published var natural = Prefs.natural { didSet { Prefs.natural = natural } }
 
     @Published var display = Prefs.display {
         didSet {
@@ -69,6 +70,7 @@ final class AppState: ObservableObject {
     private func adopt(_ p: Pairing) {
         pairing = p
         google = p.g.map { Google(keys: $0) }
+        voice.cloudKey = p.ai
     }
 
     var languages: [String] {
@@ -96,6 +98,7 @@ final class AppState: ObservableObject {
         memory.clearLocal()
         pairing = nil
         google = nil
+        voice.cloudKey = nil
         messages = []
         turns = []
         unread = nil

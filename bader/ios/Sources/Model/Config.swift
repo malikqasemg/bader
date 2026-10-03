@@ -68,6 +68,10 @@ enum Prefs {
         get { d.object(forKey: "speak") as? Bool ?? true }
         set { d.set(newValue, forKey: "speak") }
     }
+    static var natural: Bool {
+        get { d.object(forKey: "natural") as? Bool ?? true }
+        set { d.set(newValue, forKey: "natural") }
+    }
     static var display: Bool {
         get { d.object(forKey: "display") as? Bool ?? true }
         set { d.set(newValue, forKey: "display") }

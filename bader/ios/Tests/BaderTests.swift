@@ -58,6 +58,17 @@ final class BaderTests: XCTestCase {
         XCTAssertEqual([UInt8](red), [0xF8, 0x00, 0xF8, 0x00])
     }
 
+    func testSpeechPieces() {
+        let parts = Voice.chunks("You have two meetings. The first is at ten. The second is at noon! أهلاً بك؟ Done")
+        XCTAssertEqual(parts.first, "You have two meetings.")
+        XCTAssertEqual(parts.count, 2)
+        XCTAssertTrue(parts[1].hasSuffix("Done"))
+        let w = Voice.wav(Data([1, 2, 3, 4]))
+        XCTAssertEqual(w.count, 48)
+        XCTAssertEqual(String(decoding: w.prefix(4), as: UTF8.self), "RIFF")
+        XCTAssertEqual([UInt8](w[24..<28]), [0xC0, 0x5D, 0, 0])  // 24000 Hz
+    }
+
     func testBase64URLAndHTML() {
         let data = Data([0xfb, 0xff, 0xfe])
         XCTAssertEqual(data.base64URL, "-__-")

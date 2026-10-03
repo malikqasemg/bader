@@ -17,6 +17,11 @@ final class Voice: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
     private var lastLoud = Date()
     private var heard = false
     private let synth = AVSpeechSynthesizer()
+    /// The AI service key. With it (and "Natural voice" on) answers are read by the cloud voice.
+    var cloudKey: String?
+    private var player: AVAudioPlayer?
+    private var speakID = 0
+    private var cloudBusy = false
     private let file = FileManager.default.temporaryDirectory.appendingPathComponent("bader-ask.wav")
 
     override init() {
@@ -142,11 +147,90 @@ final class Voice: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
         return best ?? AVSpeechSynthesisVoice(language: arabic ? "ar-001" : "en-US")
     }
 
+    /// The text in pieces short enough to start speaking quickly: the first sentence alone, then groups.
+    nonisolated static func chunks(_ text: String, limit: Int = 260) -> [String] {
+        var sentences: [String] = []
+        var current = ""
+        for ch in text {
+            current.append(ch)
+            if ".!?؟\n".contains(ch), current.trimmingCharacters(in: .whitespacesAndNewlines).count > 1 {
+                sentences.append(current.trimmingCharacters(in: .whitespacesAndNewlines))
+                current = ""
+            }
+        }
+        let rest = current.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !rest.isEmpty { sentences.append(rest) }
+        var out: [String] = []
+        for s in sentences where !s.isEmpty {
+            if let last = out.last, out.count > 1, last.count + s.count + 1 <= limit {
+                out[out.count - 1] = last + " " + s
+            } else {
+                out.append(s)
+            }
+        }
+        return out
+    }
+
+    /// Raw sound from the cloud voice (16-bit, 24 kHz, one channel) wrapped as a WAV file.
+    nonisolated static func wav(_ pcm: Data, rate: UInt32 = 24000) -> Data {
+        var d = Data()
+        func le<T: FixedWidthInteger>(_ v: T) { withUnsafeBytes(of: v.littleEndian) { d.append(contentsOf: $0) } }
+        d.append(contentsOf: Array("RIFF".utf8)); le(UInt32(36 + pcm.count)); d.append(contentsOf: Array("WAVEfmt ".utf8))
+        le(UInt32(16)); le(UInt16(1)); le(UInt16(1)); le(rate); le(rate * 2); le(UInt16(2)); le(UInt16(16))
+        d.append(contentsOf: Array("data".utf8)); le(UInt32(pcm.count)); d.append(pcm)
+        return d
+    }
+
+    private nonisolated static func cloudSound(_ text: String, key: String) async -> Data? {
+        var req = URLRequest(url: URL(string: "https://openrouter.ai/api/v1/audio/speech")!, timeoutInterval: 40)
+        req.httpMethod = "POST"
+        req.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try? JSONSerialization.data(withJSONObject: [
+            "model": "google/gemini-3.8-flash-lite-tts", "input": text, "voice": "Charon", "response_format": "pcm",
+        ])
+        guard let (data, resp) = try? await URLSession.shared.data(for: req),
+              (resp as? HTTPURLResponse)?.statusCode == 200, data.count > 2000 else { return nil }
+        return wav(data)
+    }
+
     func speak(_ text: String) {
         let clean = Self.speakable(text)
         guard !clean.isEmpty else { return }
+        stopSpeaking()
         try? session()
-        synth.stopSpeaking(at: .immediate)
+        guard Prefs.natural, let key = cloudKey else { return builtIn(clean) }
+        let mine = speakID
+        let parts = Self.chunks(clean)
+        cloudBusy = true
+        speaking = true
+        Task { @MainActor in
+            // Fetch one piece ahead, so the next one is ready when the current one ends.
+            var next: Task<Data?, Never>? = Task.detached { await Self.cloudSound(parts[0], key: key) }
+            for i in parts.indices {
+                let sound = await next?.value
+                next = nil
+                if i + 1 < parts.count {
+                    let following = parts[i + 1]
+                    next = Task.detached { await Self.cloudSound(following, key: key) }
+                }
+                guard mine == speakID else { return }
+                guard let sound, let p = try? AVAudioPlayer(data: sound) else {
+                    // The cloud voice failed: finish with the phone's own voice.
+                    cloudBusy = false
+                    return builtIn(parts[i...].joined(separator: " "))
+                }
+                player = p
+                p.play()
+                while p.isPlaying, mine == speakID { try? await Task.sleep(for: .milliseconds(80)) }
+                guard mine == speakID else { return }
+            }
+            cloudBusy = false
+            speaking = false
+        }
+    }
+
+    private func builtIn(_ clean: String) {
         let u = AVSpeechUtterance(string: clean)
         u.voice = Self.voice(arabic: Self.isArabic(clean))
         u.rate = AVSpeechUtteranceDefaultSpeechRate
@@ -155,15 +239,19 @@ final class Voice: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
     }
 
     func stopSpeaking() {
+        speakID += 1
+        cloudBusy = false
+        player?.stop()
+        player = nil
         synth.stopSpeaking(at: .immediate)
         speaking = false
     }
 
     nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
-        Task { @MainActor in self.speaking = self.synth.isSpeaking }
+        Task { @MainActor in self.speaking = self.synth.isSpeaking || self.cloudBusy }
     }
 
     nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance) {
-        Task { @MainActor in self.speaking = self.synth.isSpeaking }
+        Task { @MainActor in self.speaking = self.synth.isSpeaking || self.cloudBusy }
     }
 }

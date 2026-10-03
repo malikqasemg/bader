@@ -8,8 +8,13 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Voice") {
+                Section {
                     Toggle("Read answers aloud", isOn: $app.speak)
+                    Toggle("Natural voice", isOn: $app.natural)
+                } header: {
+                    Text("Voice")
+                } footer: {
+                    Text("Natural voice sounds human and needs the internet; it starts about two seconds later. Off uses the iPhone's own voice.")
                 }
                 DisplaySection(link: app.link, on: $app.display)
                 MemorySection(memory: app.memory) { app.refresh() }
