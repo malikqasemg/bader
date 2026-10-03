@@ -131,6 +131,8 @@ interface Button {
   label: string;
   sub?: string;
   color: string;
+  /** Relative width (default 1). */
+  flex?: number;
   run: () => void;
 }
 
@@ -228,9 +230,9 @@ function currentButtons(): Button[] {
       a.ask(q, speak);
     };
     return [
-      { label: "Text", sub: "نص فقط", color: INK, run: pick(false) },
-      { label: "Text + voice", sub: "نص وصوت", color: CYAN, run: pick(true) },
-      { label: "✕", color: RED, run: () => { clearChoice(); drawInfo(); drawButtons(); } },
+      { label: "Text only", sub: "نص فقط", color: INK, flex: 5, run: pick(false) },
+      { label: "Text + Voice", sub: "نص وصوت", color: CYAN, flex: 5, run: pick(true) },
+      { label: "✕", color: RED, flex: 2, run: () => { clearChoice(); drawInfo(); drawButtons(); } },
     ];
   }
   if (ui.mode === "approval") {
@@ -295,9 +297,23 @@ function request(query: string) {
 const BRIEF =
   "Give me my brief now: today's meetings and the important unread emails, in at most 6 short lines.";
 
-function drawButtons() {
-  ui.buttons = currentButtons();
+/** Left edge and width of every button (they share the bar by their flex). */
+function buttonRects(): { x: number; w: number }[] {
+  const total = ui.buttons.reduce((sum, b) => sum + (b.flex ?? 1), 0) || 1;
+  let x = 0;
+  return ui.buttons.map((b) => {
+    const w = (W * (b.flex ?? 1)) / total;
+    const r = { x, w };
+    x += w;
+    return r;
+  });
+}
+
+/** pressed: the button under the finger is drawn filled, so a tap is seen. */
+function drawButtons(pressed = -1) {
+  if (pressed < 0) ui.buttons = currentButtons();
   const n = ui.buttons.length;
+  const rects = buttonRects();
   put("buttons", 0, BTN_Y, W, BTN_H, paint(W, BTN_H, (ctx) => {
     ctx.textAlign = "center";
     if (!n) {
@@ -306,18 +322,19 @@ function drawButtons() {
       ctx.fillText("Please wait · لحظة من فضلك", W / 2, BTN_H / 2);
       return;
     }
-    const bw = W / n;
     ui.buttons.forEach((b, i) => {
-      ctx.fillStyle = PANEL;
-      roundRect(ctx, i * bw + 3, 4, bw - 6, BTN_H - 8, 10);
-      ctx.fillStyle = b.color;
-      ctx.fillRect(i * bw + 14, 6, bw - 28, 2);
-      ctx.font = font(n > 3 ? 15 : 17, true);
-      ctx.fillText(fit(ctx, b.label, bw - 10), i * bw + bw / 2, b.sub ? 22 : BTN_H / 2);
+      const { x, w } = rects[i];
+      const down = i === pressed;
+      ctx.fillStyle = down ? b.color : PANEL;
+      roundRect(ctx, x + 3, 4, w - 6, BTN_H - 8, 10);
+      ctx.fillStyle = down ? "#000" : b.color;
+      if (!down) ctx.fillRect(x + 14, 6, w - 28, 2);
+      ctx.font = font(n > 3 ? 15 : 16, true);
+      ctx.fillText(fit(ctx, b.label, w - 8), x + w / 2, b.sub ? 22 : BTN_H / 2);
       if (b.sub) {
         ctx.font = font(n > 3 ? 12 : 13);
-        ctx.fillStyle = GREY;
-        ctx.fillText(fit(ctx, b.sub, bw - 10), i * bw + bw / 2, 41);
+        ctx.fillStyle = down ? "#000" : GREY;
+        ctx.fillText(fit(ctx, b.sub, w - 8), x + w / 2, 41);
       }
     });
   }));
@@ -343,7 +360,7 @@ function listRows(): { title: string; sub: string; accent: string }[] {
   return ui.lists.events.slice(0, ROWS).map((e) => ({ title: e.title, sub: eventTime(e.start), accent: CYAN }));
 }
 
-function drawList() {
+function drawList(pressed = -1) {
   const rows = listRows();
   const title = ui.page === "inbox" ? "Inbox · البريد" : "Meetings · الاجتماعات";
   const empty = ui.page === "inbox" ? "No mail · لا رسائل" : "No meetings ahead · لا اجتماعات";
@@ -360,7 +377,7 @@ function drawList() {
     }
     rows.forEach((r, i) => {
       const y = HEAD_H + i * (ROW_H + 1);
-      ctx.fillStyle = PANEL;
+      ctx.fillStyle = i === pressed ? "#2c4a66" : PANEL;
       roundRect(ctx, 4, y, W - 8, ROW_H - 2, 8);
       ctx.fillStyle = r.accent;
       ctx.fillRect(4, y + 8, 3, ROW_H - 18);
@@ -489,11 +506,22 @@ function redrawAllNow() {
 
 function onTouch(x: number, y: number) {
   if (!isTouch() || !actions) return;
-  if (y >= BTN_Y) {
-    const n = ui.buttons.length;
-    if (n) ui.buttons[Math.min(n - 1, Math.floor(x / (W / n)))].run();
+  if (y >= BTN_Y - 6) {
+    const rects = buttonRects();
+    let i = rects.findIndex((r) => x >= r.x && x < r.x + r.w);
+    if (i < 0) i = rects.length - 1;
+    const b = ui.buttons[i];
+    void Bridge.log(`screen tap ${x},${y} → ${b ? b.label : "no button"}`);
+    if (!b) return;
+    // Show the press, then act.
+    drawButtons(i);
+    window.setTimeout(() => {
+      b.run();
+      drawButtons();
+    }, 160);
     return;
   }
+  void Bridge.log(`screen tap ${x},${y} on ${ui.page}`);
   if (ui.page === "answer") {
     if (ui.answerAt + answerRows() < ui.answer.length) scrollAnswer(1);
     else setPage("home");
@@ -501,14 +529,16 @@ function onTouch(x: number, y: number) {
   }
   if (ui.page === "inbox" || ui.page === "agenda") {
     const i = Math.floor((y - FACE_Y - HEAD_H) / (ROW_H + 1));
-    if (i < 0 || actions.busy()) return;
-    if (ui.page === "inbox") {
-      const m = ui.lists.mails[i];
+    if (i < 0 || i >= ROWS || actions.busy()) return;
+    const m = ui.page === "inbox" ? ui.lists.mails[i] : null;
+    const e = ui.page === "agenda" ? ui.lists.events[i] : null;
+    if (!m && !e) return;
+    drawList(i);
+    window.setTimeout(() => {
+      drawList();
       if (m) request(`Summarise this email and tell me what I should do about it: from ${m.from}, subject "${m.subject}".`);
-    } else {
-      const e = ui.lists.events[i];
-      if (e) request(`Brief me on my meeting "${e.title}" (${eventTime(e.start)}): what it is about and anything related in my recent email.`);
-    }
+      else if (e) request(`Brief me on my meeting "${e.title}" (${eventTime(e.start)}): what it is about and anything related in my recent email.`);
+    }, 160);
     return;
   }
   // Home: tapping Bader starts / stops talking.

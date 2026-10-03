@@ -97,15 +97,18 @@ class Touch:
         if self.irq.value():
             return None
         xs, ys = [], []
-        for _ in range(5):
+        for _ in range(4):
+            # The first reading after switching axis is noisy: read twice, keep the second.
+            self._read(self.cx)
             xs.append(self._read(self.cx))
+            self._read(self.cy)
             ys.append(self._read(self.cy))
         if self.irq.value():
             return None
         xs.sort()
         ys.sort()
-        x, y = xs[2], ys[2]
-        if x < 60 or x > 4040 or y < 60 or y > 4040 or xs[4] - xs[0] > 300 or ys[4] - ys[0] > 300:
+        x, y = (xs[1] + xs[2]) // 2, (ys[1] + ys[2]) // 2
+        if x < 60 or x > 4040 or y < 60 or y > 4040 or xs[2] - xs[1] > 250 or ys[2] - ys[1] > 250:
             return None
         return x, y
 
@@ -393,29 +396,32 @@ def main():
 
     pressed_at = None
     long_sent = False
-    t_start = None  # first touch point
-    t_last = None
+    pts = []  # points of the touch in progress
     while True:
-        poll_serial(15)
+        poll_serial(12)
         now = time.ticks_ms()
-        # Touch: tap on release; a long drag is a swipe.
+        # Touch: reported on release. Where = the middle of all readings (the
+        # first and last ones, while the finger lands and lifts, are off).
         p = touch.point()
         if p:
-            if t_start is None:
-                t_start = p
-            t_last = p
-        elif t_start is not None:
-            # Click first, report after: the app answers a touch with pictures
-            # straight away, and nothing may block while those arrive.
-            beep()
-            dx, dy = t_last[0] - t_start[0], t_last[1] - t_start[1]
-            if abs(dx) > 60 and abs(dx) > abs(dy):
-                print("SWIPE", "right" if dx > 0 else "left")
-            elif abs(dy) > 60:
-                print("SWIPE", "down" if dy > 0 else "up")
-            else:
-                print("TOUCH", t_start[0], t_start[1])
-            t_start = t_last = None
+            if len(pts) < 60:
+                pts.append(p)
+        elif pts:
+            if len(pts) >= 2:
+                # Click first, report after: the app answers a touch with pictures
+                # straight away, and nothing may block while those arrive.
+                beep()
+                core = pts[1:-1] if len(pts) >= 4 else pts
+                dx, dy = core[-1][0] - core[0][0], core[-1][1] - core[0][1]
+                if abs(dx) > 60 and abs(dx) > abs(dy):
+                    print("SWIPE", "right" if dx > 0 else "left")
+                elif abs(dy) > 60:
+                    print("SWIPE", "down" if dy > 0 else "up")
+                else:
+                    xs = sorted(q[0] for q in core)
+                    ys = sorted(q[1] for q in core)
+                    print("TOUCH", xs[len(xs) // 2], ys[len(ys) // 2])
+            pts = []
         # BOOT button.
         if button.value() == 0:
             if pressed_at is None:
