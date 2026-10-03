@@ -259,11 +259,12 @@ function currentButtons(): Button[] {
   if (ui.mode === "speaking") return [{ label: "Stop", sub: "إيقاف", color: RED, run: a.stopSpeaking }];
   if (ui.mode === "thinking" || ui.mode === "working") return [];
   if (ui.page !== "home") return [home, talk];
+  // One colour for all four: a coloured button reads as "selected".
   return [
-    talk,
-    { label: "Brief", sub: "موجز", color: AMBER, run: () => request(BRIEF) },
-    { label: "Mail", sub: "البريد", color: INK, run: () => setPage("inbox") },
-    { label: "Day", sub: "اليوم", color: INK, run: () => setPage("agenda") },
+    { ...talk, color: INK, flex: 4 },
+    { label: "Brief", sub: "موجز", color: INK, flex: 4, run: () => request(BRIEF) },
+    { label: "Mail", sub: "البريد", color: INK, flex: 4, run: () => setPage("inbox") },
+    { label: "Meetings", sub: "اجتماعاتي", color: INK, flex: 6, run: () => setPage("agenda") },
   ];
 }
 

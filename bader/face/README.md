@@ -61,11 +61,11 @@ The bigger screen. With both screens plugged in, the app uses this one.
 **What it shows**
 - Top bar: time, date, unread mail.
 - Bader's face or pose, what he is doing (English + Arabic), and touch buttons.
-- Home buttons: **Talk · Brief · Mail · Day**. Tap Bader = talk.
-- **Mail** and **Day** pages: tap a row and Bader explains that email / meeting.
+- Home buttons: **Talk · Brief · Mail · Meetings**. Tap Bader = talk.
+- **Mail** and **Meetings** pages: tap a row and Bader explains that email / meeting.
 - After an answer: the full text on the screen (tap or swipe for the next page).
 - Approvals: **Approve / Deny** buttons. While listening: **Send / Cancel**. While speaking: **Stop**.
-- Swipe left/right on the home page: Home → Day → Mail.
+- Swipe left/right on the home page: Home → Meetings → Mail.
 
 **Files**
 - `device_e28/ili9341.py`, `device_e28/main.py` — MicroPython program (protocol v3)
@@ -84,7 +84,7 @@ for f in faces_e28/*.raw; do python3 -m mpremote connect <port> cp $f :faces/$(b
 python3 -m mpremote connect <port> cp device_e28/main.py :main.py
 python3 -m mpremote connect <port> reset
 ```
-First start: tap the three crosses (touch calibration, saved on the board).
+First start: press the four crosses firmly (touch calibration, saved on the board).
 Hold the BOOT button for a second to calibrate again.
 
 **Protocol v3** (USB serial 115200; every command answers `OK` or `ERR …`)

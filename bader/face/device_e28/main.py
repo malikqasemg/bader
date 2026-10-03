@@ -9,7 +9,7 @@
 #   IMG <x> <y> <w> <h> <n>   + n bytes: RLE picture of a region (see unrle)
 #   POSES on|off              rotate idle poses (off while a page covers the face)
 #   LED <r> <g> <b> [pulse]   RGB light       BEEP <hz> <ms>    BL <percent>
-#   CAL                       touch calibration (3 taps)
+#   CAL                       touch calibration (4 taps)
 #   ROT 0|1 · INV 0|1         flip the picture / invert colours (saved)
 #   EXIT                      stop (drops to the MicroPython prompt)
 # Board -> app:
@@ -210,58 +210,77 @@ def read_exact(n):
 
 # ── calibration ──────────────────────────────────────────────────────────────
 def wait_tap(poll_serial, timeout_ms):
-    """Median raw point of one tap, or None on timeout. Serial stays answered."""
+    """Raw point of one firm tap (middle of the readings), or None on timeout.
+    Serial stays answered while waiting."""
     t0 = time.ticks_ms()
     while time.ticks_diff(time.ticks_ms(), t0) < timeout_ms:
         poll_serial()
-        r = touch.raw()
-        if r:
+        if touch.raw():
             xs, ys = [], []
-            while len(xs) < 9:
+            while len(xs) < 14:
                 r = touch.raw()
                 if not r:
                     break
                 xs.append(r[0])
                 ys.append(r[1])
-                time.sleep_ms(8)
+                time.sleep_ms(6)
             while touch.raw():
                 time.sleep_ms(10)
-            if len(xs) >= 5:
-                xs.sort()
-                ys.sort()
+            # The first readings, while the finger lands, are off: drop them.
+            if len(xs) >= 6:
+                xs = sorted(xs[2:])
+                ys = sorted(ys[2:])
                 return xs[len(xs) // 2], ys[len(ys) // 2]
         time.sleep_ms(15)
     return None
 
 
+def solve_cal(raw):
+    """Calibration from the four corner taps (TL, TR, BR, BL), or None if they disagree."""
+    (a0, b0), (a1, b1), (a2, b2), (a3, b3) = raw
+    swap = abs(b1 - b0) > abs(a1 - a0)
+    u = (b0, b1, b2, b3) if swap else (a0, a1, a2, a3)
+    v = (a0, a1, a2, a3) if swap else (b0, b1, b2, b3)
+    du_top, du_bot = u[1] - u[0], u[2] - u[3]
+    dv_left, dv_right = v[3] - v[0], v[2] - v[1]
+    for p, q in ((du_top, du_bot), (dv_left, dv_right)):
+        # A real screen spans most of the sensor, and opposite edges agree.
+        if abs(p) < 2000 or abs(q) < 2000 or (p > 0) != (q > 0) or abs(p - q) > 0.2 * abs(p):
+            return None
+    ax = 200 / ((du_top + du_bot) / 2)
+    ay = 280 / ((dv_left + dv_right) / 2)
+    return {"swap": 1 if swap else 0, "ax": ax, "bx": 20 - ax * (u[0] + u[3]) / 2,
+            "ay": ay, "by": 20 - ay * (v[0] + v[1]) / 2}
+
+
 def calibrate(poll_serial, timeout_ms=45_000):
     state["busy"] = True
-    d.fill_rect(0, 0, W, H, 0)
-    text("Bader", 100, 120, 0x47FF)
-    text("Tap each cross", 64, 150)
-    pts = ((20, 20), (220, 20), (20, 300))
-    raw = []
-    for x, y in pts:
-        cross(x, y, 0xFE08)
-        r = wait_tap(poll_serial, timeout_ms)
-        cross(x, y, 0x0000)
-        if not r:
-            break
-        beep()
-        raw.append(r)
-        time.sleep_ms(250)
+    pts = ((20, 20), (220, 20), (220, 300), (20, 300))
     ok = False
-    if len(raw) == 3:
-        (a0, b0), (a1, b1), (a2, b2) = raw
-        swap = abs(b1 - b0) > abs(a1 - a0)
-        u0, u1 = (b0, b1) if swap else (a0, a1)
-        v0, v2 = (a0, a2) if swap else (b0, b2)
-        if abs(u1 - u0) > 800 and abs(v2 - v0) > 800:
-            ax = 200 / (u1 - u0)
-            ay = 280 / (v2 - v0)
-            cfg["cal"] = {"swap": 1 if swap else 0, "ax": ax, "bx": 20 - ax * u0, "ay": ay, "by": 20 - ay * v0}
+    for attempt in range(3):
+        d.fill_rect(0, 0, W, H, 0)
+        text("Bader", 100, 120, 0x47FF)
+        text("Press each + firmly", 44, 150)
+        if attempt:
+            text("Not clear - once more", 36, 170, 0xFE08)
+        raw = []
+        for x, y in pts:
+            cross(x, y, 0xFE08)
+            r = wait_tap(poll_serial, timeout_ms)
+            cross(x, y, 0x0000)
+            if not r:
+                break
+            beep()
+            raw.append(r)
+            time.sleep_ms(300)
+        if len(raw) < 4:
+            break  # nobody there: keep what we have
+        cal = solve_cal(raw)
+        if cal:
+            cfg["cal"] = cal
             save_cfg()
             ok = True
+            break
     d.fill_rect(0, 0, W, H, 0)
     state["busy"] = False
     state["face"] = None
