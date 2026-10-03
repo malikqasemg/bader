@@ -35,3 +35,19 @@
 1. Agent spots a need (unanswered VIP mail, meeting follow-up).
 2. Sends proposal with buttons Approve / Edit / Skip.
 3. Approve → run. The choice is stored so Bader learns the user.
+
+## Flow 6 — Pair the iPhone (once)
+1. Computer: Settings → "Bader on iPhone" → Show pairing code (a QR code, hidden again after 60 s).
+2. iPhone: open Bader → Scan the pairing code.
+3. The phone stores the keys in its Keychain and syncs the shared memory.
+
+## Flow 7 — Ask on the iPhone
+1. Tap the mic (or type, or take a photo).
+2. Speech → text (cloud, Arabic/English) → the model answers, calling tools for mail / calendar / news / weather.
+3. Sending a mail or creating a meeting shows an approval card: Yes / No.
+4. The answer is shown, read aloud, added to shared memory, and synced to Drive.
+
+## Flow 8 — Hand the display over
+1. The display's top bar shows PC or PHONE (drawn by the display itself).
+2. Tap it: the old owner is told AWAY, the new owner READY, and the new owner redraws everything.
+3. A side that was never heard from since power-on gives the screen to the first side that says hello.

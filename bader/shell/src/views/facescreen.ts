@@ -188,8 +188,10 @@ function put(key: string, r: Rect, data: string) {
   void Bridge.faceImg(r.x, r.y, r.w, r.h, data);
 }
 
-/** The turn-the-screen button lives at the left end of the top bar. */
+/** The turn-the-screen button lives at the left end of the top bar. Next to it
+ *  (x 36..84) the board draws its own PC / PHONE button, so that part stays empty. */
 const TURN_W = 34;
+const LINK_END = 86;
 
 function drawBar() {
   const g = geo();
@@ -215,11 +217,11 @@ function drawBar() {
     ctx.font = font(15, true);
     ctx.fillStyle = INK;
     ctx.textAlign = "left";
-    ctx.fillText(hhmm, TURN_W + 4, 13);
-    ctx.font = font(12);
+    ctx.fillText(hhmm, LINK_END + 4, 13);
+    ctx.font = font(11);
     ctx.fillStyle = GREY;
     ctx.textAlign = "center";
-    ctx.fillText(day, g.w / 2 + 14, 13);
+    ctx.fillText(day, (LINK_END + 46 + g.w - 46) / 2, 13);
     ctx.textAlign = "right";
     ctx.font = font(13, true);
     ctx.fillStyle = ui.unread > 0 ? AMBER : GREEN;
@@ -569,7 +571,7 @@ function onTouch(x: number, y: number) {
   const g = geo();
   if (y < BAR_H) {
     void Bridge.log(`screen tap ${x},${y} on the bar`);
-    if (x < TURN_W + 10) turnScreen();
+    if (x < TURN_W) turnScreen();
     return;
   }
   // A little slack around the buttons: fingers are not styluses.

@@ -88,8 +88,8 @@ def calendar():
     return events
 
 
-def history(days=7, limit=60):
-    """What the user asked and what Bader answered, across every channel."""
+def _raw_history(days=7):
+    """Every ask/answer on this computer (engine sessions + the window's journal)."""
     import sqlite3
     import time
     since = time.time() - days * 86400
@@ -126,6 +126,25 @@ def history(days=7, limit=60):
                     items.append(j)
     except OSError:
         pass
+    return items
+
+
+def history(days=7, limit=60):
+    """What the user asked and what Bader answered, across every channel and device."""
+    import time
+    since = time.time() - days * 86400
+    items = _raw_history(days)
+    known = {_entry_id(i.get("ts"), re.sub(r"\[Reply in [^\]]*\]|\[أجب[^\]]*\]", "", i.get("ask") or "").strip()) for i in items}
+    try:
+        with open(SHARED, encoding="utf-8") as f:
+            for e in _read_lines(f.read()):
+                # Things asked on the phone (or any other Bader) that this computer never saw.
+                if e.get("device") != "pc" and e["id"] not in known and (e.get("ts") or 0) > since:
+                    items.append({"ts": e["ts"], "channel": e.get("device") or "phone",
+                                  "ask": e.get("ask") or ("Note: " if e.get("kind") == "note" else ""),
+                                  "answer": e.get("answer") or ""})
+    except OSError:
+        pass
     items.sort(key=lambda i: i.get("ts") or 0, reverse=True)
     out = []
     for i in items[:limit]:
@@ -139,9 +158,120 @@ def history(days=7, limit=60):
     return out
 
 
+# ── Shared memory ────────────────────────────────────────────────────────────
+# One small file in the user's own Google Drive that every Bader (this computer,
+# the phone) reads and adds to. Each line is one ask/answer or one note:
+#   {"id", "ts", "device", "channel", "kind", "ask", "answer"}
+# Lines are only ever added, so two devices merge by id without conflicts.
+SHARED = os.path.join(HOME, "bader_shared.jsonl")
+MEMORY_NAME = "bader-memory.jsonl"
+MEMORY_KEEP = 500
+
+
+def _entry_id(ts, ask):
+    import hashlib
+    return hashlib.sha1(f"{int(ts or 0)}|{ask or ''}".encode("utf-8")).hexdigest()[:16]
+
+
+def _read_lines(text):
+    out = []
+    for line in (text or "").splitlines():
+        try:
+            j = json.loads(line)
+        except ValueError:
+            continue
+        if isinstance(j, dict) and j.get("id"):
+            out.append(j)
+    return out
+
+
+def merge_memory(*groups, keep=MEMORY_KEEP):
+    """Union by id (first one seen wins), newest `keep` entries, oldest first."""
+    seen = {}
+    for group in groups:
+        for e in group:
+            seen.setdefault(e["id"], e)
+    return sorted(seen.values(), key=lambda e: e.get("ts") or 0)[-keep:]
+
+
+def _google_access():
+    import urllib.parse
+    import urllib.request
+    with open(os.path.join(HOME, "google_token.json"), encoding="utf-8") as f:
+        t = json.load(f)
+    body = urllib.parse.urlencode({
+        "client_id": t["client_id"], "client_secret": t["client_secret"],
+        "refresh_token": t["refresh_token"], "grant_type": "refresh_token",
+    }).encode()
+    with urllib.request.urlopen(urllib.request.Request(t.get("token_uri") or "https://oauth2.googleapis.com/token", data=body), timeout=30) as r:
+        return json.load(r)["access_token"]
+
+
+def _drive(access, method, url, data=None, ctype=None):
+    import urllib.request
+    req = urllib.request.Request(url, data=data, method=method)
+    req.add_header("Authorization", f"Bearer {access}")
+    if ctype:
+        req.add_header("Content-Type", ctype)
+    with urllib.request.urlopen(req, timeout=60) as r:
+        return r.read()
+
+
+def _local_entries(days=30):
+    items = []
+    for h in _raw_history(days):
+        ask = re.sub(r"\[Reply in [^\]]*\]|\[أجب[^\]]*\]", "", h.get("ask") or "").strip()
+        if not ask or h.get("device"):
+            continue
+        items.append({
+            "id": _entry_id(h.get("ts"), ask), "ts": int(h.get("ts") or 0), "device": "pc",
+            "channel": h.get("channel") or "", "kind": "ask",
+            "ask": _clean(ask, 400), "answer": _clean(h.get("answer"), 800),
+        })
+    return items
+
+
+def memory():
+    """Two-way sync of the shared memory file. Returns how many entries it holds."""
+    import urllib.parse
+    if not os.path.isfile(os.path.join(HOME, "google_token.json")):
+        return None
+    access = _google_access()
+    q = urllib.parse.quote(f"name = '{MEMORY_NAME}' and trashed = false and appProperties has {{ key='bader' and value='memory' }}")
+    found = json.loads(_drive(access, "GET", f"https://www.googleapis.com/drive/v3/files?q={q}&fields=files(id)&spaces=drive"))
+    files = found.get("files") or []
+    remote = []
+    if files:
+        fid = files[0]["id"]
+        remote = _read_lines(_drive(access, "GET", f"https://www.googleapis.com/drive/v3/files/{fid}?alt=media").decode("utf-8", "replace"))
+    else:
+        meta = json.dumps({"name": MEMORY_NAME, "mimeType": "text/plain", "appProperties": {"bader": "memory"},
+                           "description": "Bader's shared memory. Bader keeps this up to date - please do not edit or delete."}).encode()
+        fid = json.loads(_drive(access, "POST", "https://www.googleapis.com/drive/v3/files?fields=id", meta, "application/json"))["id"]
+    try:
+        with open(SHARED, encoding="utf-8") as f:
+            mirror = _read_lines(f.read())
+    except OSError:
+        mirror = []
+    merged = merge_memory(remote, mirror, _local_entries())
+    text = "".join(json.dumps(e, ensure_ascii=False) + "\n" for e in merged)
+    if {e["id"] for e in merged} != {e["id"] for e in remote}:
+        _drive(access, "PATCH", f"https://www.googleapis.com/upload/drive/v3/files/{fid}?uploadType=media",
+               text.encode("utf-8"), "text/plain; charset=utf-8")
+    tmp = SHARED + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        f.write(text)
+    os.replace(tmp, SHARED)
+    return len(merged)
+
+
 def main():
     result = {"updated": dt.datetime.now().astimezone().isoformat(timespec="minutes")}
     errors = []
+    try:
+        result["memory"] = memory()  # first, so history below includes what the phone did
+    except Exception as exc:
+        errors.append(f"memory: {exc}")
     for key, fn in (("history", history), ("calendar", calendar), ("gmail", gmail)):
         try:
             data = fn()
@@ -156,7 +286,7 @@ def main():
         json.dump(result, f, ensure_ascii=False, indent=1)
     os.replace(tmp, OUT)
     print(json.dumps({"ok": not errors, "mails": len(result.get("gmail") or []),
-                      "events": len(result.get("calendar") or []), "errors": errors}))
+                      "events": len(result.get("calendar") or []), "memory": result.get("memory"), "errors": errors}))
 
 
 if __name__ == "__main__":

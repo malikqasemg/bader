@@ -159,6 +159,8 @@ export const Bridge = {
   faceImg: (x: number, y: number, w: number, h: number, data: string) => call<void>("face_img", { x, y, w, h, data }),
   faceInfo: () => call<FaceInfo | null>("face_info"),
   faceCmd: (line: string) => call<void>("face_cmd", { line }),
+  /** SVG of the code a phone scans to pair. */
+  pairCode: () => callOrThrow<string>("pair_code"),
   snapshotLists: () => call<SnapshotLists>("snapshot_lists"),
   // ── The character on the desktop ──────────────────────────────────────────
   buddy: (face: string, text?: string | null) => call<void>("buddy_event", { face, text: text ?? null }),

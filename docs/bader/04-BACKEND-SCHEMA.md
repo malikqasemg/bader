@@ -38,3 +38,27 @@ Hermes state DB stays as-is (sessions, memory, messages, cron). Bader adds:
 | `bader/action_items` (state DB table) | text, owner, due_at, status, source item |
 
 Rule: `initiated_by = user` runs at once; `agent` waits for approval.
+
+## C. Shared memory (user's own Google Drive)
+File `bader-memory.jsonl` (found by app property `bader=memory`). One JSON object per line, lines are only added:
+
+| Field | Meaning |
+|---|---|
+| `id` | sha1("<ts>|<ask>") first 16 hex chars — the merge key |
+| `ts` | Unix seconds |
+| `device` | `pc` or `phone` |
+| `channel` | island, telegram, phone… |
+| `kind` | `ask` or `note` |
+| `ask`, `answer` | cut to 400 / 800 characters |
+
+Merge = union by id, newest 500 kept. Computer: `bader_sync.py memory()` every sync, mirror in `bader_shared.jsonl`.
+Phone: `Memory.sync` on open and after each answer.
+
+## D. Pairing code (QR, shown on the computer only on request)
+`{"bader":1,"ai":<OpenRouter key>,"l1":"en","l2":"ar","g":{"id","s","r","a"}}` — g = Google client id, client secret,
+refresh token, account. The phone keeps it in the Keychain (this device only).
+
+## E. Display link switch (face protocol 3.1)
+Same line protocol on USB serial and on Bluetooth LE (Nordic UART service, device name `Bader`).
+New lines: board → app `AWAY`, reply `ERR away` to the side that does not own the screen.
+The board owns x 36..84 of the top bar (its PC / PHONE button).

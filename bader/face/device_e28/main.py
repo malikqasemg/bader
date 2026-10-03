@@ -13,7 +13,14 @@
 #   ROT 0-3|+ · INV 0|1       turn the picture by quarter turns / invert colours (saved)
 #   EXIT                      stop (drops to the MicroPython prompt)
 # Board -> app:
-#   TOUCH <x> <y> · SWIPE left|right|up|down · BTN short|long (BOOT) · IDLE · READY
+#   TOUCH <x> <y> · SWIPE left|right|up|down · BTN short|long (BOOT) · IDLE · READY · AWAY
+#
+# Two apps can be attached at once: the computer on the USB cable and the phone
+# over Bluetooth (the same lines, on a "Nordic UART" service named Bader).
+# Only one of them owns the screen. The board draws a small PC / PHONE button in
+# the top bar (x 36..84); a tap on it hands the screen to the other one: the old
+# owner is told AWAY (its commands are answered "ERR away" from then on) and the
+# new owner is told READY and draws everything again.
 
 import gc
 import json
@@ -29,7 +36,7 @@ from machine import Pin, PWM, SoftSPI
 
 from ili9341 import Display, W, H
 
-VERSION = "3.0"
+VERSION = "3.1"
 FACES_DIR = "/faces"
 FACE_Y, FACE_H = 28, 176
 IDLE_ROTATE = 30_000
@@ -37,6 +44,7 @@ LONG_MS = 1000
 ALIAS = {"working": "thinking", "approval": "surprised"}
 MAX_IN = 4096
 MAX_OUT = W * 16 * 2
+LINK_X, LINK_W = 36, 48  # the board's own PC / PHONE button in the top bar
 
 try:
     with open("/cfg.json") as f:
@@ -53,7 +61,92 @@ stdin = sys.stdin.buffer
 
 available = set(f[:-4] for f in os.listdir(FACES_DIR) if f.endswith(".raw")) if "faces" in os.listdir("/") else set()
 IDLE_SET = [n for n in (["idle"] + sorted(n for n in available if n.startswith("pose_"))) if n in available]
-state = {"face": None, "idle": True, "revert_at": 0, "next_pose": 0, "pose_i": 0, "poses": True, "busy": False}
+state = {"face": None, "idle": True, "revert_at": 0, "next_pose": 0, "pose_i": 0, "poses": True, "busy": False,
+         "link": cfg.get("link", "usb"), "usb_seen": False, "ble_seen": False}
+
+
+# ── the phone's link: Bluetooth ──────────────────────────────────────────────
+class Bt:
+    """The same line protocol as the cable, carried over Bluetooth LE."""
+
+    def __init__(self):
+        import bluetooth
+        self.ble = bluetooth.BLE()
+        self.ble.active(True)
+        self.ble.config(gap_name="Bader")
+        try:
+            self.ble.config(mtu=247)
+        except (OSError, ValueError):
+            pass
+        uart = bluetooth.UUID("6E400001-B5A3-F393-E0A9-E50E24DCCA9E")
+        tx = (bluetooth.UUID("6E400003-B5A3-F393-E0A9-E50E24DCCA9E"), bluetooth.FLAG_NOTIFY)
+        rx_c = (bluetooth.UUID("6E400002-B5A3-F393-E0A9-E50E24DCCA9E"), bluetooth.FLAG_WRITE | bluetooth.FLAG_WRITE_NO_RESPONSE)
+        ((self.tx, self.rx),) = self.ble.gatts_register_services(((uart, (tx, rx_c)),))
+        # Room for one whole picture band: the phone waits for our answer before the next.
+        self.ble.gatts_set_buffer(self.rx, MAX_IN + 600, True)
+        self.adv = b"\x02\x01\x06\x06\x09Bader"
+        self.resp = b"\x11\x07" + bytes(uart)
+        self.conn = None
+        self.buf = bytearray()
+        self.pending = bytearray()
+        self.ble.irq(self._irq)
+        self.advertise()
+
+    def advertise(self):
+        try:
+            self.ble.gap_advertise(200_000, adv_data=self.adv, resp_data=self.resp)
+        except OSError:
+            pass
+
+    def _irq(self, event, data):
+        if event == 1:  # a phone connected
+            self.conn = data[0]
+            self.buf = bytearray()
+            self.pending = bytearray()
+        elif event == 2:  # it left
+            self.conn = None
+            self.advertise()
+        elif event == 3 and data[1] == self.rx:  # it wrote something
+            self.buf += self.ble.gatts_read(self.rx)
+
+    def fill(self):
+        if self.buf:
+            chunk = self.buf
+            self.buf = bytearray()
+            self.pending += chunk
+
+    def send(self, msg):
+        if self.conn is None:
+            return
+        data = msg.encode() + b"\n"
+        for i in range(0, len(data), 20):
+            try:
+                self.ble.gatts_notify(self.conn, self.tx, data[i:i + 20])
+            except OSError:
+                return
+
+
+try:
+    bt = Bt()
+except Exception as e:  # no Bluetooth in this firmware: cable only
+    bt = None
+if not bt:
+    state["link"] = "usb"
+
+
+def say(src, *args):
+    """One line to the computer ("usb") or to the phone ("ble")."""
+    msg = " ".join(str(a) for a in args)
+    if src == "ble":
+        if bt:
+            bt.send(msg)
+    else:
+        print(msg)
+
+
+def event(*args):
+    """Touches and the like go to whoever owns the screen."""
+    say(state["link"], *args)
 
 # ── light, sound, button ─────────────────────────────────────────────────────
 leds = [PWM(Pin(p), freq=1000, duty=1023) for p in (22, 16, 17)]  # active low
@@ -140,14 +233,44 @@ def save_cfg():
 
 
 # ── drawing helpers ──────────────────────────────────────────────────────────
-def text(msg, x, y, color=0xFFFF):
+def text(msg, x, y, color=0xFFFF, bg=0):
     """Small built-in font (set-up screens only; the app draws the real text)."""
     w = min(len(msg) * 8, d.w)
     n = w * 8 * 2
     fb = framebuf.FrameBuffer(out_mv[:n], w, 8, framebuf.RGB565)
-    fb.fill(0)
+    fb.fill(((bg & 0xFF) << 8) | (bg >> 8))
     fb.text(msg, 0, 0, ((color & 0xFF) << 8) | (color >> 8))
     d.blit(x, y, w, 8, out_mv[:n])
+
+
+def draw_link():
+    """The board's own button: who owns the screen now. Tap = hand it to the other."""
+    if not bt:
+        return
+    phone = state["link"] == "ble"
+    bg = 0x1509 if phone else 0x231D
+    label = "PHONE" if phone else "PC"
+    d.fill_rect(LINK_X, 3, LINK_W, 20, bg)
+    text(label, LINK_X + (LINK_W - len(label) * 8) // 2, 9, 0xFFFF, bg)
+
+
+def set_link(new):
+    old = state["link"]
+    if new == old or not bt:
+        return
+    say(old, "AWAY")
+    state["link"] = new
+    cfg["link"] = new
+    save_cfg()
+    d.fill_rect(0, 0, d.w, d.h, 0)
+    led_state["pulse"] = False
+    set_led((0, 0, 0))
+    state["face"] = None
+    state["poses"] = True
+    go_idle()
+    draw_link()
+    text("Waiting for the phone..." if new == "ble" else "Waiting for the PC...", 8, d.h - 22, 0x8410)
+    say(new, "READY")
 
 
 def cross(x, y, color):
@@ -172,7 +295,7 @@ def go_idle(tell=False):
         show(IDLE_SET[state["pose_i"] % len(IDLE_SET)], force=True)
     state["next_pose"] = time.ticks_add(time.ticks_ms(), IDLE_ROTATE)
     if tell:
-        print("IDLE")
+        event("IDLE")
 
 
 @micropython.viper
@@ -208,12 +331,25 @@ def unrle(src: ptr8, n: int, dst: ptr8, cap: int) -> int:
     return o
 
 
-def read_exact(n):
+def read_exact(n, src="usb"):
+    """The n bytes of a picture, from whoever sent the command. False if they never came."""
+    if src == "ble":
+        t0 = time.ticks_ms()
+        while len(bt.pending) < n:
+            bt.fill()
+            if bt.conn is None or time.ticks_diff(time.ticks_ms(), t0) > 4000:
+                bt.pending = bytearray()
+                return False
+            time.sleep_ms(2)
+        rx_mv[:n] = bt.pending[:n]
+        bt.pending = bt.pending[n:]
+        return True
     got = 0
     while got < n:
         k = stdin.readinto(rx_mv[got:n])
         if k:
             got += k
+    return True
 
 
 # ── calibration ──────────────────────────────────────────────────────────────
@@ -296,41 +432,60 @@ def calibrate(poll_serial, timeout_ms=45_000):
     state["busy"] = False
     state["face"] = None
     go_idle()
-    print("READY")
+    draw_link()
+    event("READY")
     return ok
 
 
 # ── commands ─────────────────────────────────────────────────────────────────
-def handle(line, poll_serial):
+def handle(line, poll_serial, src="usb"):
     parts = line.strip().split()
     if not parts:
         return
     cmd = parts[0].upper()
     if cmd == "PING":
-        print("PONG bader-face", VERSION, d.w, d.h, "touch")
+        say(src, "PONG bader-face", VERSION, d.w, d.h, "touch")
+        # Nobody has ever spoken on the side that owns the screen: this side takes it.
+        if src != state["link"] and not state["ble_seen" if src == "usb" else "usb_seen"] and (src == "usb" or state["link"] == "usb"):
+            set_link(src)
+        return
+    if src != state["link"]:
+        # The other one owns the screen. Swallow a picture's bytes so the line stays in step.
+        if cmd == "IMG" and len(parts) >= 6:
+            try:
+                n = int(parts[5])
+            except ValueError:
+                n = 0
+            if 0 < n <= MAX_IN:
+                read_exact(n, src)
+        say(src, "ERR away")
         return
     if cmd == "IMG" and len(parts) >= 6:
         x, y, w, h, n = (int(p) for p in parts[1:6])
         if n <= 0 or n > MAX_IN:
-            print("ERR size")
+            say(src, "ERR size")
             return
-        read_exact(n)
+        if not read_exact(n, src):
+            say(src, "ERR short")
+            return
         if state["busy"]:
-            print("OK")
+            say(src, "OK")
             return
         if x < 0 or y < 0 or w <= 0 or h <= 0 or x + w > d.w or y + h > d.h or w * h * 2 > MAX_OUT:
-            print("ERR rect")
+            say(src, "ERR rect")
             return
         if unrle(rx, n, out, MAX_OUT) != w * h * 2:
-            print("ERR data")
+            say(src, "ERR data")
             return
         d.blit(x, y, w, h, out_mv[: w * h * 2])
         if y < FACE_Y + FACE_H and y + h > FACE_Y:
             state["face"] = None  # the face area was painted over
-        print("OK")
+        if y < 24 and x < LINK_X + LINK_W and x + w > LINK_X:
+            draw_link()  # the app painted its bar; our button goes back on top
+        say(src, "OK")
         return
     if state["busy"]:
-        print("OK")
+        say(src, "OK")
         return
     if cmd == "FACE" and len(parts) >= 2:
         name = parts[1].lower()
@@ -347,7 +502,7 @@ def handle(line, poll_serial):
                 except ValueError:
                     pass
         else:
-            print("ERR unknown face")
+            say(src, "ERR unknown face")
             return
     elif cmd == "POSES" and len(parts) >= 2:
         state["poses"] = parts[1].lower() == "on"
@@ -366,29 +521,31 @@ def handle(line, poll_serial):
         d.orient(cfg["rot"], d.inv)
         d.fill_rect(0, 0, d.w, d.h, 0)
         state["face"] = None
+        draw_link()
         # The new size is the answer: the app redraws everything for it.
-        print("PONG bader-face", VERSION, d.w, d.h, "touch")
+        say(src, "PONG bader-face", VERSION, d.w, d.h, "touch")
         return
     elif cmd == "INV" and len(parts) >= 2:
         cfg["inv"] = 1 if parts[1] == "1" else 0
         save_cfg()
         d.orient(d.rot, cfg["inv"])
     elif cmd == "CAL":
-        print("OK")
+        say(src, "OK")
         calibrate(poll_serial)
         return
     elif cmd == "LIST":
-        print("FACES", " ".join(sorted(available)))
+        say(src, "FACES", " ".join(sorted(available)))
     elif cmd == "ID":
-        print("ID", d.read_id(), "cal" if cfg.get("cal") else "nocal")
+        say(src, "ID", d.read_id(), "cal" if cfg.get("cal") else "nocal", "bt" if bt else "nobt",
+            state["link"], "phone" if bt and bt.conn is not None else "nophone", gc.mem_free())
     elif cmd == "EXIT":
-        print("OK")
+        say(src, "OK")
         micropython.kbd_intr(3)
         raise SystemExit
     else:
-        print("ERR unknown")
+        say(src, "ERR unknown")
         return
-    print("OK")
+    say(src, "OK")
 
 
 def main():
@@ -402,6 +559,7 @@ def main():
         while poll.poll(wait):
             wait = 0
             ch = stdin.read(1)
+            state["usb_seen"] = True
             # Set-up tools (mpremote) break in with Ctrl-C right after a reset.
             if ch == b"\x03" and not line and time.ticks_diff(time.ticks_ms(), t_boot) < 10_000:
                 micropython.kbd_intr(3)
@@ -422,6 +580,28 @@ def main():
                 if len(line) > 120:
                     line = bytearray()
 
+    def poll_ble():
+        if not bt:
+            return
+        bt.fill()
+        while True:
+            i = bt.pending.find(b"\n")
+            if i < 0:
+                if len(bt.pending) > 160:
+                    bt.pending = bytearray()
+                return
+            text_line = bt.pending[:i].decode().strip()
+            bt.pending = bt.pending[i + 1:]
+            state["ble_seen"] = True
+            if text_line:
+                try:
+                    handle(text_line, poll_serial, "ble")
+                except SystemExit:
+                    raise
+                except Exception as e:
+                    say("ble", "ERR", e)
+                gc.collect()
+
     d.fill_rect(0, 0, d.w, d.h, 0)
     d.backlight(0.9)
     set_led((0, 0, 0))
@@ -432,13 +612,15 @@ def main():
         calibrate(poll_serial)
     else:
         go_idle()
-        print("READY")
+        draw_link()
+        event("READY")
 
     pressed_at = None
     long_sent = False
     pts = []  # points of the touch in progress
     while True:
         poll_serial(12)
+        poll_ble()
         now = time.ticks_ms()
         # Touch: reported on release. Where = the middle of all readings (the
         # first and last ones, while the finger lands and lifts, are off).
@@ -454,13 +636,17 @@ def main():
                 core = pts[1:-1] if len(pts) >= 4 else pts
                 dx, dy = core[-1][0] - core[0][0], core[-1][1] - core[0][1]
                 if abs(dx) > 60 and abs(dx) > abs(dy):
-                    print("SWIPE", "right" if dx > 0 else "left")
+                    event("SWIPE", "right" if dx > 0 else "left")
                 elif abs(dy) > 60:
-                    print("SWIPE", "down" if dy > 0 else "up")
+                    event("SWIPE", "down" if dy > 0 else "up")
                 else:
                     xs = sorted(q[0] for q in core)
                     ys = sorted(q[1] for q in core)
-                    print("TOUCH", xs[len(xs) // 2], ys[len(ys) // 2])
+                    tx, ty = xs[len(xs) // 2], ys[len(ys) // 2]
+                    if bt and ty < 30 and LINK_X - 2 <= tx < LINK_X + LINK_W + 6:
+                        set_link("usb" if state["link"] == "ble" else "ble")
+                    else:
+                        event("TOUCH", tx, ty)
             pts = []
         # BOOT button.
         if button.value() == 0:
@@ -468,11 +654,11 @@ def main():
                 pressed_at = now
                 long_sent = False
             elif not long_sent and time.ticks_diff(now, pressed_at) >= LONG_MS:
-                print("BTN long")
+                event("BTN long")
                 long_sent = True
         elif pressed_at is not None:
             if not long_sent and time.ticks_diff(now, pressed_at) >= 40:
-                print("BTN short")
+                event("BTN short")
             pressed_at = None
         if state["revert_at"] and time.ticks_diff(now, state["revert_at"]) >= 0:
             go_idle(tell=True)

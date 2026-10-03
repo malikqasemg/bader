@@ -1,0 +1,5 @@
+Bader.xcodeproj
+Info.plist
+build/
+DerivedData/
+*.xcuserstate

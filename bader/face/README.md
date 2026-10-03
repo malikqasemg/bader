@@ -99,3 +99,10 @@ Hold the BOOT button for a second to calibrate again.
 
 Pins: LCD SCK 14, MOSI 13, MISO 12, CS 15, DC 2, backlight 21 · touch (XPT2046) CLK 25,
 MOSI 32, MISO 39, CS 33, IRQ 36 · light R 22, G 16, B 17 (low = on) · speaker 26, amp enable 4 (low) · BOOT 0.
+
+## Two owners: computer (USB) and phone (Bluetooth) — firmware 3.1
+The board also offers the same line protocol over Bluetooth LE (Nordic UART service, name `Bader`).
+Only one side owns the screen. The board draws a PC / PHONE button in the top bar (x 36..84); a tap hands the
+screen over: the old owner gets `AWAY` (and `ERR away` to anything it still sends), the new owner gets `READY`.
+`ID` now also reports: `bt|nobt`, the owner (`usb|ble`), `phone|nophone`, free memory.
+`push.py` waits for the board's prompt by itself (Bluetooth makes start-up a few seconds longer).

@@ -16,15 +16,29 @@ p.timeout = 2
 p.dtr = False
 p.rts = False
 p.open()
-time.sleep(3.0)
+# Opening the port restarts the board: wait until it says READY (Bluetooth makes that a few seconds).
+t0 = time.time()
+seen = b""
+while b"READY" not in seen and time.time() - t0 < 12:
+    seen += p.read(64)
+time.sleep(0.3)
 p.reset_input_buffer()
+# EXIT restarts main.py; Ctrl-C in its first seconds drops to the prompt. When
+# exactly that lands varies, so keep asking until the raw prompt answers cleanly.
 p.write(b"\nEXIT\n")
-time.sleep(0.5)
-p.write(b"\r\x03\x03")
-time.sleep(0.3)
-p.write(b"\r\x01")  # raw REPL
-time.sleep(0.3)
-p.reset_input_buffer()
+for attempt in range(8):
+    time.sleep(0.7)
+    p.write(b"\r\x03\x03")
+    time.sleep(0.4)
+    p.write(b"\r\x01")  # raw REPL
+    time.sleep(0.6)
+    p.reset_input_buffer()
+    p.write(b"print('SYNC')\x04")
+    out = p.read_until(b"\x04>")
+    if out.startswith(b"OK") and b"SYNC" in out and b"Traceback" not in out:
+        break
+else:
+    sys.exit("the board did not give its prompt")
 
 
 def run(code):

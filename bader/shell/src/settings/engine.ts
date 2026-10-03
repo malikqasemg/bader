@@ -407,6 +407,49 @@ export function phoneSection(status: EngineStatus): HTMLElement {
   );
 }
 
+/** Bader on the iPhone: a Bader of its own that shares this one's memory. */
+export function iphoneSection(): HTMLElement {
+  const box = h("div", { style: "display:none;background:#fff;border-radius:12px;padding:10px;width:260px;margin:8px auto" });
+  const feedback = h("div", {});
+  const show = h("button", { class: "primary", text: "Show pairing code" }) as HTMLButtonElement;
+  let timer = 0;
+  const hide = () => {
+    window.clearTimeout(timer);
+    box.innerHTML = "";
+    box.style.display = "none";
+    show.textContent = "Show pairing code";
+  };
+  show.addEventListener("click", async () => {
+    if (box.style.display !== "none") return hide();
+    try {
+      box.innerHTML = await Bridge.pairCode();
+      const svg = box.querySelector("svg");
+      if (svg) {
+        svg.setAttribute("width", "240");
+        svg.setAttribute("height", "240");
+      }
+      box.style.display = "block";
+      show.textContent = "Hide code";
+      notice(feedback, true, "Open Bader on the iPhone and point it at this code. It hides itself in 60 seconds.");
+      timer = window.setTimeout(hide, 60_000);
+    } catch (err) {
+      notice(feedback, false, String(err));
+    }
+  });
+  return h(
+    "section",
+    {},
+    h("h2", {}, h("span", { text: "Bader on iPhone  ·  بدر على الآيفون" })),
+    h("span", {
+      class: "hint",
+      text: "The iPhone app is a Bader of its own, so it works when this computer is off, and it shares the same memory. The code holds your keys: show it only to your own phone.",
+    }),
+    h("div", { class: "row" }, show),
+    box,
+    feedback,
+  );
+}
+
 // ── First-run setup ───────────────────────────────────────────────────────────
 
 /** One card, shown until it is finished or skipped: languages, AI key, voice. */

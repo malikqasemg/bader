@@ -10,6 +10,7 @@ mod hooks;
 mod hotkey;
 mod integrations;
 mod island;
+mod pair;
 mod log;
 #[cfg(windows)]
 mod pipe;
@@ -313,6 +314,12 @@ fn face_info() -> Option<face::Info> {
 #[tauri::command]
 fn face_cmd(face: State<face::Face>, line: String) -> Result<(), String> {
     face.command(&line)
+}
+
+/// The QR code a phone scans to become a Bader with the same keys and memory.
+#[tauri::command]
+fn pair_code() -> Result<String, String> {
+    pair::code_svg()
 }
 
 /// Unread mail and upcoming meetings for the face screen's pages.
@@ -682,6 +689,7 @@ pub fn run() {
             face_img,
             face_info,
             face_cmd,
+            pair_code,
             snapshot_lists,
             run_approve,
             sync_now,

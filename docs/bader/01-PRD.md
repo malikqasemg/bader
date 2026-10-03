@@ -67,6 +67,14 @@ follow-up?"; voice notes in Arabic work; 18:00 end-of-day email.
 - Secrets: OS credential store (Windows Credential Manager / macOS Keychain).
 - Customer brings own LLM key (or iNetGenius-provided endpoint, later).
 
+### Bader on iPhone (added 2026-10-03)
+- A second, standalone Bader on the iPhone: it keeps working when the computer is off.
+- Does on the phone: mail, calendar, news, weather, voice in and out, camera ("look at this"), approvals, memory.
+- Stays on the computer only: browser control, long meeting transcription, files on the computer.
+- One shared memory: both Baders read and add to one file in the user's own Google Drive (no server of ours).
+- Pairing: the computer shows a QR code once; the phone scans it and receives the keys. Nothing is typed.
+- The small display works with either Bader: USB to the computer, Bluetooth to the phone, one tap on its PC / PHONE button to switch.
+
 ## 7. App Flow — see `02-APPFLOW.md`
 ## 8. UI/UX Design Brief — see `03-UIUX-BRIEF.md`
 ## 9. Backend Schema — see `04-BACKEND-SCHEMA.md`

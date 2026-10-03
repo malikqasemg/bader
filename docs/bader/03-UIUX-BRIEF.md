@@ -39,3 +39,14 @@ Tray: Bader icon, status dot (green = running, amber = needs sign-in, red = lice
 - Action card: one line + Approve / Edit / Skip buttons.
 - Confirmation: ✓ + what + to whom, one line.
 - Every brief ends with: useful / too long / missed something.
+
+## iPhone app (2026-10-03)
+- Dark, one screen: Bader's face and status on top, the conversation in the middle, quick buttons
+  (Brief, Mail, Meetings, News) and one big mic at the bottom. Camera button next to the text box.
+- Approval card: yellow, title + detail, "No" and green "Yes, do it".
+- Arabic text aligns right; English left. Answers are read with the phone's built-in voices.
+- Settings: read answers aloud, display on/off + status, shared memory (count, last sync, sync now), unpair.
+
+## Display driven by the phone
+- Same layout as from the computer: bar, face, one status line, buttons (Talk, Brief, Mail, Meet).
+- After an answer: text pages with More / Home. Approval: Yes ✓ / No ✕. A pressed button turns amber.

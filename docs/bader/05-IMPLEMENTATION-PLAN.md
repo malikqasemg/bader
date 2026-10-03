@@ -42,6 +42,16 @@ Durations are estimates.
 
 - [ ] Settings + wizard in Arabic (RTL); Bader tray icon (head) instead of app icon
 
+## Phase 3e — Bader on iPhone + display switch (started 2026-10-03)
+- [x] Shared memory file in Drive, two-way sync on the computer (`bader_sync.py`).
+- [x] Pairing QR in Settings (`pair.rs`, `iphoneSection`).
+- [x] iPhone app `bader/ios` (SwiftUI, xcodegen): chat, voice, camera, mail, calendar, news, weather, approvals, memory.
+- [x] Display firmware 3.1: Bluetooth + PC / PHONE button; computer side understands AWAY.
+- [x] Phone draws the display over Bluetooth (`FaceLink`, `FaceScreen`).
+- [ ] Test on the real iPhone (needs Developer Mode on the phone).
+- [ ] Display on Bluetooth from the computer (no cable) — not built.
+- [ ] Morning brief notification on the phone; Outlook on the phone; App Store / TestFlight (needs paid Apple developer account).
+
 ## Phase 2 — Licence (week 2)
 - [ ] Licence server: add `product` column + `/bader/*` endpoints to iNetBuzz `mcp-server`
 - [ ] `bader/license/` client: activate, refresh every 24 h, status, usage

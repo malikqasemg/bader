@@ -45,8 +45,23 @@ pub struct Info {
 
 static INFO: Mutex<Option<Info>> = Mutex::new(None);
 
+/// True while the phone owns the touch screen (its PC / PHONE button was tapped).
+/// The screen is then treated as not there until it says READY again.
+static AWAY: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
 pub fn info() -> Option<Info> {
+    if AWAY.load(std::sync::atomic::Ordering::Relaxed) {
+        return None;
+    }
     *INFO.lock().unwrap()
+}
+
+fn set_away(app: &AppHandle, away: bool) {
+    use std::sync::atomic::Ordering;
+    if AWAY.swap(away, Ordering::Relaxed) != away {
+        crate::log::line(format!("face screen: {}", if away { "the phone has it now" } else { "back on this computer" }));
+        let _ = app.emit_to(crate::island::WINDOW_LABEL, "face-ready", info());
+    }
 }
 
 enum Msg {
@@ -258,6 +273,11 @@ fn spawn_reader(app: AppHandle, port: &Port, acks: Sender<bool>) {
                         let _ = acks.send(true);
                     } else if l == "OK" {
                         let _ = acks.send(true);
+                    } else if l == "AWAY" || l == "ERR away" {
+                        set_away(&app, true);
+                        if l != "AWAY" {
+                            let _ = acks.send(false);
+                        }
                     } else if l.starts_with("ERR") {
                         crate::log::line(format!("face screen: {l}"));
                         let _ = acks.send(false);
@@ -273,6 +293,7 @@ fn spawn_reader(app: AppHandle, port: &Port, acks: Sender<bool>) {
                     } else if l == "IDLE" {
                         let _ = app.emit_to(crate::island::WINDOW_LABEL, "face-idle", ());
                     } else if l == "READY" {
+                        AWAY.store(false, std::sync::atomic::Ordering::Relaxed);
                         let _ = app.emit_to(crate::island::WINDOW_LABEL, "face-ready", info());
                     }
                 }
