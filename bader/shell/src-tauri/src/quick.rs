@@ -21,6 +21,7 @@ creating or changing calendar events; making or editing files or documents (Word
 searching the internet or opening websites; reading files; running commands; using the computer or browser; \
 transcribing recordings; setting reminders or remembering something for later; or any fact that is not in this prompt \
 and not stable general knowledge (news, prices, weather, anything recent) — reply with exactly [[ENGINE]] and nothing else. \
+Never say that you cannot search, have no internet or only have mail and calendar: Bader CAN search the web, read news and use tools — through the engine. For any such request, on ANY topic, reply [[ENGINE]]. \
 If the user refers to an earlier conversation, task, file or meeting ('yesterday', 'the transcript I shared', 'last time') answer from the 'Earlier asks' list below when it holds enough detail; if it does not, reply [[ENGINE]]. Otherwise answer from the snapshot below and general knowledge. Never invent emails, meetings, names, numbers or dates.";
 
 /// Endpoint, key and model for the quick lane, from the engine's own settings.
@@ -123,7 +124,40 @@ Count 'N days ago' from this date; convert other time zones to local time before
 }
 
 /// Tries the quick lane. Ok(Some(text)) = answered; Ok(None) = hand to the engine.
+/// Requests that always need the engine's tools: don't even ask the quick model.
+const ENGINE_WORDS: &[&str] = &[
+    "news", "search", "look up", "google", "internet", "online", "website", "weather", "price", "stock",
+    "latest", "headline",
+    "أخبار", "اخبار", "ابحث", "إبحث", "بحث", "الإنترنت", "الانترنت", "النت", "موقع", "الطقس", "طقس",
+    "سعر", "أسعار", "اسعار", "سهم", "آخر المستجدات", "عاجل",
+];
+
+fn needs_engine(query: &str) -> bool {
+    let q = query.to_lowercase();
+    ENGINE_WORDS.iter().any(|w| q.contains(w))
+}
+
+/// The quick model gave up ("I can't search the internet") instead of handing off.
+fn gave_up(text: &str) -> bool {
+    let t = text.to_lowercase();
+    [
+        "can't search", "cannot search", "can not search", "unable to search", "can't browse", "cannot browse",
+        "don't have access to the internet", "do not have access to the internet", "no internet access",
+        "don't have internet", "can't access the internet", "cannot access the internet", "have no tools",
+        "don't have tools", "can't look up", "cannot look up",
+        "لا أستطيع البحث", "لا استطيع البحث", "لا يمكنني البحث", "لا أستطيع الوصول", "لا يمكنني الوصول",
+        "لا أملك اتصال", "ليس لدي اتصال", "ليس لدي إمكانية", "لا أستطيع تصفح", "لا يمكنني تصفح",
+        "جلب أخبار",
+    ]
+    .iter()
+    .any(|p| t.contains(p))
+}
+
 pub async fn try_answer(app: &AppHandle, history: &[Value], query: &str) -> Result<Option<String>, String> {
+    if needs_engine(query) {
+        crate::log::line("quick lane skipped → engine (needs tools)");
+        return Ok(None);
+    }
     let Some((base, key, model)) = lane() else { return Ok(None) };
     let prefs = crate::runs::prefs();
     let mut system = format!("{RULES}\nIMPORTANT: {}\n{}", crate::runs::language_rules(&prefs), now_line());
@@ -208,6 +242,11 @@ pub async fn try_answer(app: &AppHandle, history: &[Value], query: &str) -> Resu
     if text.is_empty() || text.contains(HANDOFF) {
         return Ok(None);
     }
+    if gave_up(&text) {
+        // It refused instead of handing off: the engine can do it (the caller clears what was shown).
+        crate::log::line("quick lane gave up → engine");
+        return Ok(None);
+    }
     crate::log::line(format!("quick lane answered ({model})"));
     Ok(Some(text))
 }
@@ -219,6 +258,25 @@ mod tests {
         let y = "model:\n  default: minimax/minimax-m3\n  provider: openrouter\n  base_url: 'https://openrouter.ai/api/v1'\nother:\n  provider: x\n";
         assert_eq!(super::yaml_value(y, "model.provider").as_deref(), Some("openrouter"));
         assert_eq!(super::yaml_value(y, "model.base_url").as_deref(), Some("https://openrouter.ai/api/v1"));
+    }
+}
+
+#[cfg(test)]
+mod routing_tests {
+    #[test]
+    fn tool_requests_skip_the_quick_lane() {
+        assert!(super::needs_engine("ما هي آخر أخبار الحرب؟"));
+        assert!(super::needs_engine("Search the web for Cisco earnings"));
+        assert!(super::needs_engine("كيف الطقس في جدة"));
+        assert!(!super::needs_engine("ما هي اجتماعاتي اليوم؟"));
+        assert!(!super::needs_engine("What is 15% of 240?"));
+    }
+
+    #[test]
+    fn refusals_are_handed_to_the_engine() {
+        assert!(super::gave_up("أنا آسف — لا أستطيع البحث عن أخبار حالية. لا يمكنني البحث على الإنترنت."));
+        assert!(super::gave_up("Sorry, I can't search the internet from here."));
+        assert!(!super::gave_up("You have one meeting today at 18:00."));
     }
 }
 
