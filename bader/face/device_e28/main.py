@@ -405,6 +405,9 @@ def main():
                 t_start = p
             t_last = p
         elif t_start is not None:
+            # Click first, report after: the app answers a touch with pictures
+            # straight away, and nothing may block while those arrive.
+            beep()
             dx, dy = t_last[0] - t_start[0], t_last[1] - t_start[1]
             if abs(dx) > 60 and abs(dx) > abs(dy):
                 print("SWIPE", "right" if dx > 0 else "left")
@@ -412,7 +415,6 @@ def main():
                 print("SWIPE", "down" if dy > 0 else "up")
             else:
                 print("TOUCH", t_start[0], t_start[1])
-            beep()
             t_start = t_last = None
         # BOOT button.
         if button.value() == 0:

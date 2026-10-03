@@ -379,24 +379,26 @@ function drawPage() {
   else drawList();
 }
 
+// The app decides every redraw (idle poses too): the board must never be busy
+// drawing by itself while a picture is on its way — its USB link has no flow control.
+const POSES = ["idle", "pose_waving", "pose_thumbs_up", "pose_welcoming", "pose_pointing", "pose_dancing", "pose_celebrating"];
+let poseAt = 0;
+
 function sendFace() {
   if (ui.page !== "home") return;
-  void Bridge.face(ui.mode);
+  void Bridge.face((ui.mode === "idle" ? POSES[poseAt % POSES.length] : ui.mode) as FaceName);
 }
 
 function setPage(page: Page) {
   if (page === ui.page) return;
-  const wasHome = ui.page === "home";
   ui.page = page;
   window.clearTimeout(ui.answerTimer);
   ui.sent.delete("page");
   ui.sent.delete("info");
   if (page === "home") {
-    void Bridge.faceCmd("POSES on");
     sendFace();
     drawInfo();
   } else {
-    if (wasHome) void Bridge.faceCmd("POSES off");
     if (page !== "answer") void Bridge.snapshotLists().then((l) => {
       if (l) ui.lists = l;
       drawPage();
@@ -417,13 +419,12 @@ function scrollAnswer(dir: number) {
 function redrawAll() {
   ui.sent.clear();
   if (!isTouch()) return;
+  void Bridge.faceCmd("POSES off");
   drawBar();
   if (ui.page === "home") {
-    void Bridge.faceCmd("POSES on");
-    void Bridge.face(ui.mode);
+    sendFace();
     drawInfo();
   } else {
-    void Bridge.faceCmd("POSES off");
     drawPage();
   }
   drawButtons();
@@ -496,6 +497,11 @@ export function initFace(a: FaceActions) {
   window.setInterval(() => {
     if (isTouch()) drawBar();
   }, 20_000);
+  window.setInterval(() => {
+    if (!isTouch() || ui.mode !== "idle" || ui.page !== "home") return;
+    poseAt++;
+    sendFace();
+  }, 30_000);
 }
 
 /** Shows a face; with seconds, the screen goes back to idle by itself. */
@@ -511,11 +517,11 @@ export function setFace(name: FaceName, seconds?: number) {
   // Bader at work is shown on the home page; answers stay up while he speaks.
   if (["listening", "thinking", "working", "approval"].includes(name) && ui.page !== "home") setPage("home");
   if (ui.page === "home") {
-    void Bridge.face(name, seconds);
+    sendFace();
     drawInfo();
   }
   drawButtons();
-  if (seconds) ui.revert = window.setTimeout(() => becameIdle(), seconds * 1000 + 400);
+  if (seconds) ui.revert = window.setTimeout(() => becameIdle(), seconds * 1000);
 }
 
 /** The board went back to its idle pose by itself: only the text and buttons follow. */
@@ -524,6 +530,7 @@ function becameIdle() {
   if (ui.mode === "idle") return;
   ui.mode = "idle";
   ui.detail = [];
+  sendFace();
   drawInfo();
   drawButtons();
 }

@@ -353,7 +353,15 @@ impl Link {
                         enc = rle16(&data[top * row..(top + rows) * row]);
                     }
                     let head = format!("IMG {x} {} {w} {rows} {}", *y as usize + top, enc.len());
-                    all_ok &= self.acked(&head, &enc)?;
+                    // A lost byte spoils one band: send it again (twice at most).
+                    let mut ok = self.acked(&head, &enc)?;
+                    for _ in 0..2 {
+                        if ok {
+                            break;
+                        }
+                        ok = self.acked(&head, &enc)?;
+                    }
+                    all_ok &= ok;
                     top += rows;
                 }
                 Ok(all_ok)

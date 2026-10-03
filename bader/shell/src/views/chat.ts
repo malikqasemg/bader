@@ -288,10 +288,16 @@ export function buildPrompt(onHeightChange: () => void): ViewHost {
       if (heard.text) {
         input.value = heard.text;
         await submit(true);
+      } else {
+        // Nothing was said: back to idle instead of "thinking" forever.
+        input.placeholder = "";
+        setFace("idle");
+        stripNow([{ text: "I didn't hear anything · لم أسمع شيئاً", color: "#96a0aa" }]);
       }
     } catch (err) {
       listening = false;
       setMic();
+      setFace("concerned", 4);
       State.noteMessage = String(err).replace(/^Error:\s*/, "");
       State.view = "note";
       State.notify();
