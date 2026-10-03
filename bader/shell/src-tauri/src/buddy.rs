@@ -49,6 +49,12 @@ pub fn create(app: &AppHandle, browser_args: &str) {
             #[cfg(target_os = "macos")]
             crate::island::float_everywhere(&win);
             crate::island::make_non_activating(&win);
+            // Dragged somewhere: remember the spot.
+            win.on_window_event(|event| {
+                if let tauri::WindowEvent::Moved(pos) = event {
+                    remember(pos.x, pos.y);
+                }
+            });
         }
         Err(err) => crate::log::line(format!("buddy window failed: {err}")),
     }
@@ -58,13 +64,69 @@ fn window(app: &AppHandle) -> Option<WebviewWindow> {
     app.get_webview_window(LABEL)
 }
 
+/// Where the user dragged the character (physical pixels); written to the
+/// preferences at most twice a second while it moves.
+static SPOT: std::sync::Mutex<Option<(i32, i32, std::time::Instant)>> = std::sync::Mutex::new(None);
+/// place() moves the window itself; those moves are not the user's.
+static PLACING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+fn remember(x: i32, y: i32) {
+    if PLACING.load(std::sync::atomic::Ordering::SeqCst) {
+        return;
+    }
+    let mut spot = SPOT.lock().unwrap();
+    let due = spot.is_none_or(|(_, _, t)| t.elapsed() > std::time::Duration::from_millis(500));
+    let stamp = if due { std::time::Instant::now() } else { spot.map(|s| s.2).unwrap_or_else(std::time::Instant::now) };
+    *spot = Some((x, y, stamp));
+    if due {
+        crate::engine::pref_set("buddy_pos", serde_json::json!([x, y]));
+    }
+}
+
+/// The remembered spot, if it is still on a screen (monitors come and go).
+fn saved_spot(win: &WebviewWindow) -> Option<(i32, i32)> {
+    let live = (*SPOT.lock().unwrap()).map(|(x, y, _)| (x, y));
+    let (x, y) = live.or_else(|| {
+        let v = crate::engine::pref_get("buddy_pos")?;
+        Some((v.get(0)?.as_i64()? as i32, v.get(1)?.as_i64()? as i32))
+    })?;
+    let on_screen = win.available_monitors().ok()?.iter().any(|m| {
+        let (p, s) = (m.position(), m.size());
+        x + 40 > p.x && x + 40 < p.x + s.width as i32 && y + 40 > p.y && y + 40 < p.y + s.height as i32
+    });
+    on_screen.then_some((x, y))
+}
+
+/// Saves the final spot when a drag ends (the page tells us).
+pub fn drag_done(app: &AppHandle) {
+    let Some(win) = window(app) else { return };
+    if let Ok(pos) = win.outer_position() {
+        *SPOT.lock().unwrap() = Some((pos.x, pos.y, std::time::Instant::now()));
+        crate::engine::pref_set("buddy_pos", serde_json::json!([pos.x, pos.y]));
+    }
+}
+
+pub fn start_drag(app: &AppHandle) {
+    if let Some(win) = window(app) {
+        let _ = win.start_dragging();
+    }
+}
+
 fn place(win: &WebviewWindow) {
+    if let Some((x, y)) = saved_spot(win) {
+        PLACING.store(true, std::sync::atomic::Ordering::SeqCst);
+        let _ = win.set_position(PhysicalPosition::new(x, y));
+        PLACING.store(false, std::sync::atomic::Ordering::SeqCst);
+        return;
+    }
     let Ok(Some(m)) = win.primary_monitor() else { return };
     let scale = m.scale_factor();
     let (mp, ms) = (*m.position(), *m.size());
     let x = mp.x + ms.width as i32 - ((W + SIDE) * scale) as i32;
     let y = mp.y + ms.height as i32 - ((H + BOTTOM) * scale) as i32;
+    PLACING.store(true, std::sync::atomic::Ordering::SeqCst);
     let _ = win.set_position(PhysicalPosition::new(x, y));
+    PLACING.store(false, std::sync::atomic::Ordering::SeqCst);
 }
 
 pub fn show(app: &AppHandle) {

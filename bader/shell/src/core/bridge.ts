@@ -164,6 +164,8 @@ export const Bridge = {
   buddyHide: () => call<void>("buddy_hide"),
   buddyClick: () => call<void>("buddy_click"),
   buddyMenu: () => call<void>("buddy_menu"),
+  buddyDrag: () => call<void>("buddy_drag"),
+  buddyDropped: () => call<void>("buddy_dropped"),
   /** Plays a spoken reply natively; resolves when it ends or is stopped. */
   audioPlay: (data: string) => callOrThrow<void>("audio_play", { data }),
   audioStop: () => call<void>("audio_stop"),

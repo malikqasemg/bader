@@ -336,6 +336,17 @@ fn buddy_click(app: AppHandle) {
     let _ = app.emit_to(island::WINDOW_LABEL, "buddy-click", ());
 }
 
+/// The character is being dragged to a new spot.
+#[tauri::command]
+fn buddy_drag(app: AppHandle) {
+    buddy::start_drag(&app);
+}
+
+#[tauri::command]
+fn buddy_dropped(app: AppHandle) {
+    buddy::drag_done(&app);
+}
+
 /// Right-click on the character: the quick-actions menu.
 #[tauri::command]
 fn buddy_menu(app: AppHandle) {
@@ -658,6 +669,8 @@ pub fn run() {
             buddy_hide,
             buddy_click,
             buddy_menu,
+            buddy_drag,
+            buddy_dropped,
             face_img,
             face_info,
             face_cmd,

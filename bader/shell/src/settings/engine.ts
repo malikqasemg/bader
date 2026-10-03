@@ -319,7 +319,7 @@ export function languageSection(status: EngineStatus): HTMLElement {
     h("div", { class: "row" }, h("label", { text: "Screen buttons answer" }), screenReply),
     h("span", { class: "hint", text: "For Bader's touch screen: what happens when you tap Brief, an email or a meeting." }),
     h("div", { class: "row" }, h("label", { text: "Show Bader on the desktop" }), buddy),
-    h("span", { class: "hint", text: "Bader in the corner of your screen. Click opens his window; right-click gives quick actions." }),
+    h("span", { class: "hint", text: "Bader in the corner of your screen. Drag him anywhere; double-click opens his window; right-click gives quick actions." }),
     h("div", { class: "row" }, h("label", { text: "Ask before sending" }), approvals),
     h("span", { class: "hint", text: "When on, Bader asks you before sending or deleting mail and changing your calendar." }),
     h("div", { class: "row" }, apply),

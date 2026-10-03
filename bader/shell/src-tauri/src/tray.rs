@@ -19,11 +19,14 @@ pub fn build(app: &AppHandle) -> tauri::Result<()> {
     )?;
     app.manage(crate::buddy::TrayTick(buddy.clone()));
 
-    let menu = Menu::with_items(app, &[&open, &buddy, &sep1, &settings, &pause, &sep2, &quit])?;
+    let toggle_window = MenuItem::with_id(app, "buddy-window", "Show / hide Bader's window", true, None::<&str>)?;
+
+    let menu = Menu::with_items(app, &[&open, &toggle_window, &buddy, &sep1, &settings, &pause, &sep2, &quit])?;
 
     let mut builder = TrayIconBuilder::with_id("bader")
         .tooltip("Bader")
         .menu(&menu)
+        .show_menu_on_left_click(true)
         .on_menu_event(|app: &AppHandle, event| match event.id.as_ref() {
             "quit" => app.exit(0),
             "settings" => crate::show_settings_window(app),

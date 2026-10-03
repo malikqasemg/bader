@@ -1,6 +1,6 @@
 // Bader on the desktop: a small character in the corner of the screen that
 // pops up, shows what Bader is doing, and fools around a little when idle.
-// Click = open Bader's window. Right-click = quick actions (talk, brief, mail,
+// Drag = move him. Double-click = open Bader's window. Right-click = quick actions (talk, brief, mail,
 // meetings, show/hide the window, hide Bader, quit).
 //
 // Setting "Show Bader on the desktop" (Settings, tray menu): on | off.
@@ -180,10 +180,38 @@ async function loadMode() {
   scheduleAntic();
 }
 
-document.body.addEventListener("click", () => {
-  animate("jump");
-  void Bridge.buddyClick();
+// Hold and move = drag him anywhere (the spot is remembered).
+// Double-click = open Bader's window. A plain click just makes him hop.
+let downAt: { x: number; y: number } | null = null;
+let dragging = false;
+document.body.addEventListener("mousedown", (e) => {
+  if (e.button !== 0) return;
+  downAt = { x: e.screenX, y: e.screenY };
+  dragging = false;
 });
+document.body.addEventListener("mousemove", (e) => {
+  if (!downAt || dragging) return;
+  if (Math.abs(e.screenX - downAt.x) + Math.abs(e.screenY - downAt.y) < 4) return;
+  dragging = true;
+  downAt = null;
+  void Bridge.buddyDrag();
+  // The system takes over the drag; the page gets no mouse-up for it.
+  window.setTimeout(() => void Bridge.buddyDropped(), 1500);
+});
+document.body.addEventListener("mouseup", () => {
+  downAt = null;
+  if (dragging) void Bridge.buddyDropped();
+});
+document.body.addEventListener("mouseenter", () => {
+  if (dragging) {
+    dragging = false;
+    void Bridge.buddyDropped();
+  }
+});
+document.body.addEventListener("click", () => {
+  if (!dragging) animate("jump");
+});
+document.body.addEventListener("dblclick", () => void Bridge.buddyClick());
 document.body.addEventListener("contextmenu", (e) => {
   e.preventDefault();
   void Bridge.buddyMenu();

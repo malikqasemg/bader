@@ -84,6 +84,8 @@ export function buildHeader(actions: ViewActions): ViewHost {
 
   const gearBtn = h("button", { title: "Settings", onclick: () => go("settings") }, svg(ICONS.gear, 14));
   const soundBtn = h("button", { title: "Mute", onclick: () => actions.toggleSound() }, svg(ICONS.speakerOn, 14));
+  // Hide: closes the window (it comes back from the top edge, the menu-bar icon or Bader himself).
+  const hideBtn = h("button", { title: "Hide · إخفاء", text: "✕", style: "font-size:13px;line-height:1", onclick: () => actions.collapse() });
 
   function go(v: IslandViewName) {
     actions.blip();
@@ -94,7 +96,7 @@ export function buildHeader(actions: ViewActions): ViewHost {
     "div",
     { id: "header" },
     h("div", { class: "tabs" }, tabHome, tabChat, tabDrop),
-    h("div", { class: "header-actions" }, gearBtn, soundBtn),
+    h("div", { class: "header-actions" }, gearBtn, soundBtn, hideBtn),
   );
 
   return {
