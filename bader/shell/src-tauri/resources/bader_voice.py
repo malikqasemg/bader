@@ -39,7 +39,6 @@ def serve():
     try:  # warm up: load the speech model and voice libraries now, not on the first voice note
         import tempfile
         import wave
-        from tools.transcription_tools import transcribe_audio
         import edge_tts  # noqa: F401
         warm = os.path.join(tempfile.gettempdir(), "bader_warm.wav")
         with wave.open(warm, "wb") as w:
@@ -47,7 +46,12 @@ def serve():
             w.setsampwidth(2)
             w.setframerate(16000)
             w.writeframes(b"\x00\x00" * 8000)
-        transcribe_audio(warm)
+        provider, name = _stt_config()
+        if provider == "local":
+            _local_stt(warm, name)
+        else:
+            from tools.transcription_tools import transcribe_audio
+            transcribe_audio(warm)
     except Exception:
         pass
     _emit({"ok": True, "ready": True})
@@ -70,19 +74,67 @@ def serve():
             _emit({"ok": False, "error": f"{type(exc).__name__}: {exc}"})
 
 
-def stt(path):
-    from tools.transcription_tools import transcribe_audio
+_STT = {"name": None, "model": None}
 
-    result = transcribe_audio(path, source="voice_mode")
-    if isinstance(result, str):
-        result = json.loads(result)
-    text = (result.get("transcript") or result.get("text") or "").strip()
-    ok = bool(result.get("success", bool(text))) and bool(text)
+
+def _stt_config():
+    """(provider, model name) from the engine profile's Voice settings."""
+    try:
+        import yaml
+        with open(os.path.join(os.environ.get("HERMES_HOME", ""), "config.yaml"), encoding="utf-8") as f:
+            cfg = (yaml.safe_load(f) or {}).get("stt") or {}
+        return cfg.get("provider") or "local", (cfg.get("local") or {}).get("model") or "small"
+    except Exception:
+        return "local", "small"
+
+
+def _local_stt(path, name):
+    """On-device speech-to-text, Arabic or English only.
+
+    Whisper left to itself sometimes "hears" Urdu or Persian in accented English
+    or Arabic; here the language is the more likely of the two Bader speaks."""
+    from faster_whisper import WhisperModel
+
+    if _STT["name"] != name:
+        threads = max(2, min(12, (os.cpu_count() or 4) - 2))
+        _STT["model"] = WhisperModel(name, device="cpu", compute_type="float32", cpu_threads=threads)
+        _STT["name"] = name
+    model = _STT["model"]
+    # The assistant's name, so "Bader" is not heard as "better".
+    opts = {"beam_size": 1, "vad_filter": True, "hotwords": "Bader بدر"}
+    segments, info = model.transcribe(path, **opts)
+    language = info.language
+    if language not in ("ar", "en"):
+        probs = dict(info.all_language_probs or [])
+        language = max(("ar", "en"), key=lambda l: probs.get(l, 0.0))
+        segments, info = model.transcribe(path, language=language, **opts)
+    return " ".join(s.text.strip() for s in segments).strip(), language
+
+
+def stt(path):
+    provider, name = _stt_config()
+    text, language, error = "", "", None
+    if provider == "local":
+        try:
+            text, language = _local_stt(path, name)
+        except Exception as exc:  # model missing, no memory…: use the engine's own path
+            error = f"{type(exc).__name__}: {exc}"
+            print("local stt failed:", error, file=sys.stderr)
+            provider = "engine"
+    if provider != "local":
+        from tools.transcription_tools import transcribe_audio
+
+        result = transcribe_audio(path, source="voice_mode")
+        if isinstance(result, str):
+            result = json.loads(result)
+        text = (result.get("transcript") or result.get("text") or "").strip()
+        language = result.get("language") or ""
+        error = result.get("error")
     _emit({
-        "ok": ok,
+        "ok": bool(text),
         "text": text,
-        "language": result.get("language") or "",
-        "error": None if ok else (result.get("error") or "Nothing was heard."),
+        "language": language,
+        "error": None if text else (error or "Nothing was heard."),
     })
 
 

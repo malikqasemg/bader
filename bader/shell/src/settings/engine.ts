@@ -189,6 +189,7 @@ export function voiceSection(status: EngineStatus): HTMLElement {
       ["base", "Fast (base)"],
       ["small", "Better Arabic (small)"],
       ["medium", "Best Arabic (medium, slower)"],
+      ["large-v3-turbo", "Most accurate, Arabic + English (needs a fast computer)"],
     ],
     status.values["stt.local.model"] || "small",
   );
