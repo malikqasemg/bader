@@ -46,6 +46,7 @@ const VOICE_KEYS: &[&str] = &[
     "bader.primary_lang",
     "bader.second_lang",
     "bader.setup_done",
+    "bader.buddy",
 ];
 
 /// .env keys the settings window may write.
@@ -226,6 +227,11 @@ pub async fn status() -> EngineStatus {
                 "bader.second_lang".into(),
                 prefs.get("second_lang").and_then(Value::as_str).unwrap_or("ar").to_string(),
             );
+            // The character on the desktop: always | events | off.
+            v.insert(
+                "bader.buddy".into(),
+                prefs.get("buddy").and_then(Value::as_str).unwrap_or("always").to_string(),
+            );
             v.insert(
                 "bader.setup_done".into(),
                 (prefs.get("setup_done").and_then(Value::as_bool) == Some(true)).to_string(),
@@ -263,12 +269,14 @@ pub fn apply(mut values: HashMap<String, String>, secrets: HashMap<String, Strin
     let primary = values.remove("bader.primary_lang").filter(|v| ["en", "ar"].contains(&v.as_str()));
     let second = values.remove("bader.second_lang").filter(|v| ["en", "ar", "none"].contains(&v.as_str()));
     let setup_done = values.remove("bader.setup_done");
+    let buddy = values.remove("bader.buddy").filter(|v| ["always", "events", "off"].contains(&v.as_str()));
     if quick_lane.is_some()
         || quick_model.is_some()
         || screen_reply.is_some()
         || primary.is_some()
         || second.is_some()
         || setup_done.is_some()
+        || buddy.is_some()
     {
         let path = dir.join("bader_prefs.json");
         let mut cur: Value = std::fs::read_to_string(&path)
@@ -289,6 +297,9 @@ pub fn apply(mut values: HashMap<String, String>, secrets: HashMap<String, Strin
         }
         if let Some(l) = second {
             cur["second_lang"] = Value::String(l);
+        }
+        if let Some(b) = buddy {
+            cur["buddy"] = Value::String(b);
         }
         if let Some(d) = setup_done {
             cur["setup_done"] = Value::Bool(d == "true");
@@ -483,4 +494,23 @@ pub fn needs_setup() -> bool {
         .and_then(|t| serde_json::from_str(&t).ok())
         .unwrap_or(Value::Null);
     prefs.get("setup_done").and_then(Value::as_bool) != Some(true)
+}
+
+/// One value from bader_prefs.json.
+pub fn pref_get(key: &str) -> Option<Value> {
+    let prefs: Value = std::fs::read_to_string(home().join("bader_prefs.json"))
+        .ok()
+        .and_then(|t| serde_json::from_str(&t).ok())?;
+    prefs.get(key).cloned()
+}
+
+/// Sets one value in bader_prefs.json (the rest is kept).
+pub fn pref_set(key: &str, value: Value) {
+    let path = home().join("bader_prefs.json");
+    let mut cur: Value = std::fs::read_to_string(&path)
+        .ok()
+        .and_then(|t| serde_json::from_str(&t).ok())
+        .unwrap_or_else(|| serde_json::json!({}));
+    cur[key] = value;
+    let _ = std::fs::write(&path, serde_json::to_string_pretty(&cur).unwrap_or_default());
 }

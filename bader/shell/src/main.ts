@@ -17,6 +17,10 @@ async function main() {
   const island = new Island(root);
   island.fsm.holdOpen = () => State.chatHold();
   window.addEventListener("bader-open-chat", () => island.openChat());
+  window.addEventListener("bader-toggle-window", () => {
+    if (State.mode === "expanded") island.collapse();
+    else island.openChat();
+  });
 
   const boot = await Bridge.boot();
   if (boot) {

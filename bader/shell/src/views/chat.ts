@@ -360,6 +360,31 @@ export function buildPrompt(onHeightChange: () => void): ViewHost {
     busy: () => sending || recording || listening,
   });
 
+  // A click on the desktop character opens the chat; its right-click menu has quick actions.
+  void onEvent<null>("buddy-click", () => {
+    window.dispatchEvent(new Event("bader-open-chat"));
+    window.setTimeout(() => input.focus(), 250);
+  });
+  const QUICK: Record<string, string> = {
+    brief: "Give me my brief now: today's meetings and the important unread emails, in at most 6 short lines.",
+    mail: "List my unread emails, the most important first, in at most 6 short lines.",
+    meetings: "What are my next meetings? A short list with times.",
+  };
+  void onEvent<string>("buddy-action", (what) => {
+    if (what === "window") {
+      window.dispatchEvent(new Event("bader-toggle-window"));
+      return;
+    }
+    window.dispatchEvent(new Event("bader-open-chat"));
+    if (what === "talk") {
+      talkSilent = false;
+      void toggleMic();
+    } else if (QUICK[what] && !sending && !recording && !listening) {
+      input.value = QUICK[what];
+      void submit(false);
+    }
+  });
+
   let pttStarted = false;
   void onEvent<string>("ptt", (kind) => {
     if (kind === "down") {

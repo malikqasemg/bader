@@ -1,6 +1,7 @@
 // Bader for Windows — app wiring and the commands the island calls.
 
 mod accounts;
+mod buddy;
 mod claude;
 mod engine;
 mod face;
@@ -313,6 +314,34 @@ fn snapshot_lists() -> sync::Lists {
     sync::lists()
 }
 
+/// What Bader is doing → the character on the desktop.
+#[tauri::command]
+fn buddy_event(app: AppHandle, face: String, text: Option<String>) {
+    buddy::event(&app, face, text);
+}
+
+#[tauri::command]
+fn buddy_show(app: AppHandle) {
+    buddy::show(&app);
+}
+
+#[tauri::command]
+fn buddy_hide(app: AppHandle) {
+    buddy::hide(&app);
+}
+
+/// A click on the character: open Bader's window.
+#[tauri::command]
+fn buddy_click(app: AppHandle) {
+    let _ = app.emit_to(island::WINDOW_LABEL, "buddy-click", ());
+}
+
+/// Right-click on the character: the quick-actions menu.
+#[tauri::command]
+fn buddy_menu(app: AppHandle) {
+    buddy::popup_menu(&app);
+}
+
 #[tauri::command]
 fn face_led(face: State<face::Face>, r: u8, g: u8, b: u8, pulse: bool) {
     face.led(r, g, b, pulse);
@@ -451,11 +480,12 @@ async fn engine_status() -> engine::EngineStatus {
 
 #[tauri::command]
 async fn engine_apply(
+    app: AppHandle,
     values: std::collections::HashMap<String, String>,
     secrets: std::collections::HashMap<String, String>,
     restart: bool,
 ) -> Result<(), String> {
-    tauri::async_runtime::spawn_blocking(move || {
+    let done = tauri::async_runtime::spawn_blocking(move || {
         engine::apply(values, secrets)?;
         voice::restart_worker();
         if restart {
@@ -464,7 +494,9 @@ async fn engine_apply(
         Ok(())
     })
     .await
-    .map_err(|e| e.to_string())?
+    .map_err(|e| e.to_string())?;
+    buddy::sync(&app); // "Show Bader on the desktop" may have changed
+    done
 }
 
 #[tauri::command]
@@ -621,6 +653,11 @@ pub fn run() {
             face_set,
             face_strip,
             face_led,
+            buddy_event,
+            buddy_show,
+            buddy_hide,
+            buddy_click,
+            buddy_menu,
             face_img,
             face_info,
             face_cmd,
@@ -666,6 +703,10 @@ pub fn run() {
             hotkey::start(handle.clone());
             // Before the island: see create_settings_window.
             create_settings_window(&handle);
+            buddy::create(&handle, BROWSER_ARGS);
+            app.on_menu_event(|app, event| {
+                buddy::on_menu(app, event.id.as_ref());
+            });
             // First run: the set-up wizard (languages, AI key, voice) opens by itself.
             if engine::needs_setup() {
                 let h2 = handle.clone();

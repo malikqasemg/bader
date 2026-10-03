@@ -670,7 +670,11 @@ export function initFace(a: FaceActions) {
 }
 
 /** Shows a face; with seconds, the screen goes back to idle by itself. */
+let lastFace: FaceName = "idle";
+
 export function setFace(name: FaceName, seconds?: number) {
+  lastFace = name;
+  void Bridge.buddy(name); // the character on the desktop follows along
   if (!isTouch()) {
     void Bridge.face(name, seconds);
     return;
@@ -703,6 +707,7 @@ function becameIdle() {
 
 /** Text under the current working face (cleared on the next face change). */
 export function stripNow(lines: StripLine[]) {
+  if (lines[0]?.text && lastFace !== "idle") void Bridge.buddy(lastFace, lines[0].text);
   if (!isTouch()) {
     void Bridge.faceStrip(V2_Y, V2_H, false, v2Strip(lines));
     return;
@@ -731,6 +736,7 @@ export function stripIdle(lines: StripLine[], unread = 0) {
 
 /** Touch screen: puts the full answer on the screen (tap = next page / home). */
 export function showAnswer(text: string) {
+  if (text.trim()) void Bridge.buddy("happy", text.replace(/\s+/g, " ").trim().slice(0, 100));
   if (!isTouch() || !text.trim()) return;
   ui.answer = wrap(text);
   ui.answerAt = 0;

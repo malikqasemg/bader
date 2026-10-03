@@ -158,6 +158,12 @@ export const Bridge = {
   faceInfo: () => call<FaceInfo | null>("face_info"),
   faceCmd: (line: string) => call<void>("face_cmd", { line }),
   snapshotLists: () => call<SnapshotLists>("snapshot_lists"),
+  // ── The character on the desktop ──────────────────────────────────────────
+  buddy: (face: string, text?: string | null) => call<void>("buddy_event", { face, text: text ?? null }),
+  buddyShow: () => call<void>("buddy_show"),
+  buddyHide: () => call<void>("buddy_hide"),
+  buddyClick: () => call<void>("buddy_click"),
+  buddyMenu: () => call<void>("buddy_menu"),
   /** Plays a spoken reply natively; resolves when it ends or is stopped. */
   audioPlay: (data: string) => callOrThrow<void>("audio_play", { data }),
   audioStop: () => call<void>("audio_stop"),

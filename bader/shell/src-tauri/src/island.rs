@@ -249,7 +249,85 @@ pub fn apply_geometry(app: &AppHandle, pref: &str, collapsed: bool) {
     // Moving across displays can rescale the window: re-assert the physical size.
     let _ = win.set_size(PhysicalSize::new(pw, ph));
     let _ = win.set_always_on_top(true);
+    pin_to_top(&win, lw, lh);
 }
+
+/// AppKit pushes any window that reaches over the menu bar back under it
+/// (`constrainFrameRect:toScreen:`). The island sits at the very top edge, so
+/// its window class is told to leave frames alone. Done once.
+#[cfg(target_os = "macos")]
+fn allow_over_menu_bar(ns: &objc2_app_kit::NSWindow) {
+    use objc2::runtime::{AnyClass, AnyObject, Imp, Sel};
+    use objc2_foundation::NSRect;
+    use std::sync::Once;
+
+    unsafe extern "C-unwind" fn keep(_this: *mut AnyObject, _cmd: Sel, rect: NSRect, _screen: *mut AnyObject) -> NSRect {
+        rect
+    }
+    static ONCE: Once = Once::new();
+    ONCE.call_once(|| unsafe {
+        let obj: &AnyObject = &*(ns as *const objc2_app_kit::NSWindow as *const AnyObject);
+        let cls: *const AnyClass = obj.class();
+        let imp: Imp = std::mem::transmute(
+            keep as unsafe extern "C-unwind" fn(*mut AnyObject, Sel, NSRect, *mut AnyObject) -> NSRect,
+        );
+        let types = c"{CGRect={CGPoint=dd}{CGSize=dd}}@:{CGRect={CGPoint=dd}{CGSize=dd}}@";
+        objc2::ffi::class_replaceMethod(cls as *mut AnyClass, objc2::sel!(constrainFrameRect:toScreen:), imp, types.as_ptr());
+    });
+}
+
+/// macOS keeps ordinary windows under the menu bar; the island belongs at the
+/// very top edge of the screen (where a notch would be), over the menu bar.
+/// The window toolkit applies its own size / position a moment later, so the
+/// frame is set natively now and again shortly after.
+#[cfg(target_os = "macos")]
+fn pin_to_top(win: &WebviewWindow, w: f64, h: f64) {
+    fn pin(win: &WebviewWindow, w: f64, h: f64) {
+        let target = win.clone();
+        let _ = win.run_on_main_thread(move || {
+            use objc2_app_kit::NSWindow;
+            let Ok(ptr) = target.ns_window() else { return };
+            if ptr.is_null() {
+                return;
+            }
+            let ns: &NSWindow = unsafe { &*(ptr as *const NSWindow) };
+            allow_over_menu_bar(ns);
+            let Some(screen) = ns.screen() else { return };
+            let sf = screen.frame();
+            let mut f = ns.frame();
+            f.size.width = w;
+            f.size.height = h;
+            // Centred, top edge on the top edge of the screen (AppKit's y grows upwards).
+            f.origin.x = sf.origin.x + ((sf.size.width - w) / 2.0).round();
+            f.origin.y = sf.origin.y + sf.size.height - h;
+            ns.setFrame_display(f, true);
+            let got = ns.frame();
+            if (got.origin.y - f.origin.y).abs() > 0.5 {
+                crate::log::line(format!(
+                    "island pin: wanted y {} h {}, got y {} h {} (screen h {})",
+                    f.origin.y, f.size.height, got.origin.y, got.size.height, sf.size.height
+                ));
+            }
+        });
+    }
+    // Only the newest placement may re-apply itself (open → close in quick succession).
+    static GEN: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let mine = GEN.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1;
+    pin(win, w, h);
+    let later = win.clone();
+    tauri::async_runtime::spawn(async move {
+        for ms in [40u64, 160, 400] {
+            tokio::time::sleep(Duration::from_millis(ms)).await;
+            if GEN.load(std::sync::atomic::Ordering::SeqCst) != mine {
+                return;
+            }
+            pin(&later, w, h);
+        }
+    });
+}
+
+#[cfg(not(target_os = "macos"))]
+fn pin_to_top(_win: &WebviewWindow, _w: f64, _h: f64) {}
 
 #[cfg(windows)]
 fn hwnd_of(win: &WebviewWindow) -> Option<HWND> {

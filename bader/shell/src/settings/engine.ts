@@ -283,6 +283,8 @@ export function languageSection(status: EngineStatus): HTMLElement {
     ],
     status.values["bader.screen_reply"] || "ask",
   );
+  const buddy = h("input", { type: "checkbox" }) as HTMLInputElement;
+  buddy.checked = (status.values["bader.buddy"] ?? "always") !== "off";
   const feedback = h("div", {});
   const apply = h("button", { class: "primary", text: "Apply" }) as HTMLButtonElement;
   apply.addEventListener("click", async () => {
@@ -295,6 +297,7 @@ export function languageSection(status: EngineStatus): HTMLElement {
           "bader.summary_lang": summary.value,
           "bader.approvals": approvals.checked ? "true" : "false",
           "bader.screen_reply": screenReply.value,
+          "bader.buddy": buddy.checked ? "always" : "off",
         },
         {},
         true,
@@ -315,6 +318,8 @@ export function languageSection(status: EngineStatus): HTMLElement {
     h("div", { class: "row" }, h("label", { text: "Meeting summaries" }), summary),
     h("div", { class: "row" }, h("label", { text: "Screen buttons answer" }), screenReply),
     h("span", { class: "hint", text: "For Bader's touch screen: what happens when you tap Brief, an email or a meeting." }),
+    h("div", { class: "row" }, h("label", { text: "Show Bader on the desktop" }), buddy),
+    h("span", { class: "hint", text: "Bader in the corner of your screen. Click opens his window; right-click gives quick actions." }),
     h("div", { class: "row" }, h("label", { text: "Ask before sending" }), approvals),
     h("span", { class: "hint", text: "When on, Bader asks you before sending or deleting mail and changing your calendar." }),
     h("div", { class: "row" }, apply),
