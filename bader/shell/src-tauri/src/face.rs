@@ -429,7 +429,8 @@ fn run(app: AppHandle, rx: Receiver<Msg>) {
         while let Ok(more) = rx.try_recv() {
             queue.push(more);
         }
-        for m in coalesce(queue) {
+        let batch = coalesce(queue);
+        for m in batch {
             match &m {
                 Msg::Line(l) if l.starts_with("FACE ") => last_face = Some(l.clone()),
                 Msg::Strip { idle: true, y, h, data } => last_idle = Some((*y, *h, data.clone())),

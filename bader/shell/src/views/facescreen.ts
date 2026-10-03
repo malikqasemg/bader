@@ -84,7 +84,9 @@ const isArabic = (s: string) => /[؀-ۿ]/.test(s);
 
 function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
   ctx.beginPath();
-  ctx.roundRect(x, y, w, h, r);
+  // Older WebKit / WebView2 have no roundRect.
+  if (typeof ctx.roundRect === "function") ctx.roundRect(x, y, w, h, r);
+  else ctx.rect(x, y, w, h);
   ctx.fill();
 }
 
@@ -417,6 +419,14 @@ function scrollAnswer(dir: number) {
 }
 
 function redrawAll() {
+  try {
+    redrawAllNow();
+  } catch (err) {
+    void Bridge.log(`face screen redraw failed: ${String(err)}`);
+  }
+}
+
+function redrawAllNow() {
   ui.sent.clear();
   if (!isTouch()) return;
   void Bridge.faceCmd("POSES off");
@@ -497,6 +507,16 @@ export function initFace(a: FaceActions) {
   window.setInterval(() => {
     if (isTouch()) drawBar();
   }, 20_000);
+  // The "screen arrived" event can fire before this page listens (app start):
+  // ask now and then, and redraw when the answer changed.
+  window.setInterval(() => {
+    void Bridge.faceInfo().then((i) => {
+      const now = i ?? null;
+      if (JSON.stringify(now) === JSON.stringify(dev)) return;
+      dev = now;
+      redrawAll();
+    });
+  }, 4_000);
   window.setInterval(() => {
     if (!isTouch() || ui.mode !== "idle" || ui.page !== "home") return;
     poseAt++;
