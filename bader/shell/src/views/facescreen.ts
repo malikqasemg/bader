@@ -114,24 +114,36 @@ function v2Strip(lines: StripLine[]): string {
 
 // ── Touch screen (v3) ────────────────────────────────────────────────────────
 
-const W = 240;
 const BAR_H = 28;
 const FACE_Y = 28;
-const INFO_Y = 204;
-const INFO_H = 60;
-const BTN_Y = 264;
-const BTN_H = 56;
-const PAGE_H = INFO_Y + INFO_H - FACE_Y; // 236: a page covers the face and the info
+const FACE_BOTTOM = 204; // the face picture is 240×176 at (0, 28) either way up
 const ROW_H = 40;
 const HEAD_H = 30;
-const ROWS = 5;
+
+interface Rect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/** Where things go. Upright: buttons along the bottom. On its side: buttons down the right. */
+function geo(): { w: number; land: boolean; info: Rect; btn: Rect; page: Rect } {
+  const w = dev?.w ?? 240;
+  const land = w > (dev?.h ?? 320);
+  return land
+    ? { w, land, info: { x: 0, y: 204, w: 240, h: 36 }, btn: { x: 240, y: 28, w: 80, h: 212 }, page: { x: 0, y: 28, w: 240, h: 212 } }
+    : { w, land, info: { x: 0, y: 204, w: 240, h: 60 }, btn: { x: 0, y: 264, w: 240, h: 56 }, page: { x: 0, y: 28, w: 240, h: 236 } };
+}
+
+const listRowCount = () => Math.floor((geo().page.h - HEAD_H) / (ROW_H + 1));
 
 type Page = "home" | "agenda" | "inbox" | "answer";
 interface Button {
   label: string;
   sub?: string;
   color: string;
-  /** Relative width (default 1). */
+  /** Relative size (default 1). */
   flex?: number;
   run: () => void;
 }
@@ -170,50 +182,70 @@ const ui = {
 let actions: FaceActions | null = null;
 
 /** Sends a region only when its picture changed. */
-function put(key: string, x: number, y: number, w: number, h: number, data: string) {
+function put(key: string, r: Rect, data: string) {
   if (ui.sent.get(key) === data) return;
   ui.sent.set(key, data);
-  void Bridge.faceImg(x, y, w, h, data);
+  void Bridge.faceImg(r.x, r.y, r.w, r.h, data);
 }
 
+/** The turn-the-screen button lives at the left end of the top bar. */
+const TURN_W = 34;
+
 function drawBar() {
+  const g = geo();
   const now = new Date();
   const hhmm = now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
   const day = now.toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" });
-  put("bar", 0, 0, W, BAR_H, paint(W, BAR_H, (ctx) => {
+  put("bar", { x: 0, y: 0, w: g.w, h: BAR_H }, paint(g.w, BAR_H, (ctx) => {
     ctx.fillStyle = PANEL;
-    ctx.fillRect(0, 0, W, BAR_H - 2);
+    ctx.fillRect(0, 0, g.w, BAR_H - 2);
+    // Turn button: a small screen outline with an arrow.
+    ctx.strokeStyle = GREY;
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(8, 7, 10, 13);
+    ctx.beginPath();
+    ctx.arc(20, 13, 6, -Math.PI / 2, Math.PI / 3);
+    ctx.stroke();
+    ctx.fillStyle = GREY;
+    ctx.beginPath();
+    ctx.moveTo(20, 4);
+    ctx.lineTo(24, 7.5);
+    ctx.lineTo(19, 10);
+    ctx.fill();
     ctx.font = font(15, true);
     ctx.fillStyle = INK;
     ctx.textAlign = "left";
-    ctx.fillText(hhmm, 8, 13);
+    ctx.fillText(hhmm, TURN_W + 4, 13);
     ctx.font = font(12);
     ctx.fillStyle = GREY;
     ctx.textAlign = "center";
-    ctx.fillText(day, W / 2, 13);
+    ctx.fillText(day, g.w / 2 + 14, 13);
     ctx.textAlign = "right";
     ctx.font = font(13, true);
     ctx.fillStyle = ui.unread > 0 ? AMBER : GREEN;
-    ctx.fillText(ui.unread > 0 ? `✉ ${ui.unread}` : "✉ 0", W - 8, 13);
+    ctx.fillText(ui.unread > 0 ? `✉ ${ui.unread}` : "✉ 0", g.w - 8, 13);
   }));
 }
 
 function drawInfo() {
   if (ui.page !== "home") return;
+  const r = geo().info;
+  const small = r.h < 50;
   const label = LABELS[ui.mode];
   const lines: StripLine[] = ui.choice && ui.mode === "idle"
     ? [{ text: "How do you want the answer?", color: INK, size: 16, bold: true }, { text: "كيف تريد الإجابة؟", color: AMBER, size: 16 }]
     : ui.mode === "idle" || !label
     ? ui.idle
     : [{ text: `${label[0]} · ${label[1]}`, color: label[2], size: 19, bold: true }, ...ui.detail.slice(0, 1)];
-  put("info", 0, INFO_Y, W, INFO_H, paint(W, INFO_H, (ctx) => {
+  put("info", r, paint(r.w, r.h, (ctx) => {
     ctx.textAlign = "center";
     const rows = lines.slice(0, 2);
     rows.forEach((l, i) => {
-      ctx.font = font(l.size ?? (rows.length === 1 ? 19 : 16), l.bold);
+      const size = l.size ?? (rows.length === 1 ? 19 : 16);
+      ctx.font = font(small ? Math.min(size, rows.length === 1 ? 16 : 13) : size, l.bold);
       ctx.fillStyle = l.color ?? INK;
-      const y = rows.length === 1 ? INFO_H / 2 : 17 + i * 27;
-      ctx.fillText(fit(ctx, l.text, W - 12), W / 2, y);
+      const y = rows.length === 1 ? r.h / 2 : small ? 9 + i * 17 : 17 + i * 27;
+      ctx.fillText(fit(ctx, l.text, r.w - 12), r.w / 2, y);
     });
   }));
 }
@@ -260,11 +292,12 @@ function currentButtons(): Button[] {
   if (ui.mode === "thinking" || ui.mode === "working") return [];
   if (ui.page !== "home") return [home, talk];
   // One colour for all four: a coloured button reads as "selected".
+  const wide = geo().land ? 4 : 6;
   return [
     { ...talk, color: INK, flex: 4 },
     { label: "Brief", sub: "موجز", color: INK, flex: 4, run: () => request(BRIEF) },
     { label: "Mail", sub: "البريد", color: INK, flex: 4, run: () => setPage("inbox") },
-    { label: "Meetings", sub: "اجتماعاتي", color: INK, flex: 6, run: () => setPage("agenda") },
+    { label: "Meetings", sub: "اجتماعاتي", color: INK, flex: wide, run: () => setPage("agenda") },
   ];
 }
 
@@ -298,14 +331,17 @@ function request(query: string) {
 const BRIEF =
   "Give me my brief now: today's meetings and the important unread emails, in at most 6 short lines.";
 
-/** Left edge and width of every button (they share the bar by their flex). */
-function buttonRects(): { x: number; w: number }[] {
+/** Each button's rectangle inside the button area (side by side, or stacked on a sideways screen). */
+function buttonRects(): Rect[] {
+  const g = geo();
   const total = ui.buttons.reduce((sum, b) => sum + (b.flex ?? 1), 0) || 1;
-  let x = 0;
+  let at = 0;
   return ui.buttons.map((b) => {
-    const w = (W * (b.flex ?? 1)) / total;
-    const r = { x, w };
-    x += w;
+    const share = (b.flex ?? 1) / total;
+    const r = g.land
+      ? { x: 0, y: at, w: g.btn.w, h: g.btn.h * share }
+      : { x: at, y: 0, w: g.btn.w * share, h: g.btn.h };
+    at += g.land ? r.h : r.w;
     return r;
   });
 }
@@ -313,29 +349,38 @@ function buttonRects(): { x: number; w: number }[] {
 /** pressed: the button under the finger is drawn filled, so a tap is seen. */
 function drawButtons(pressed = -1) {
   if (pressed < 0) ui.buttons = currentButtons();
+  const g = geo();
   const n = ui.buttons.length;
   const rects = buttonRects();
-  put("buttons", 0, BTN_Y, W, BTN_H, paint(W, BTN_H, (ctx) => {
+  put("buttons", g.btn, paint(g.btn.w, g.btn.h, (ctx) => {
     ctx.textAlign = "center";
     if (!n) {
-      ctx.font = font(14);
       ctx.fillStyle = GREY;
-      ctx.fillText("Please wait · لحظة من فضلك", W / 2, BTN_H / 2);
+      if (g.land) {
+        ctx.font = font(13);
+        ctx.fillText("Please wait", g.btn.w / 2, g.btn.h / 2 - 10);
+        ctx.fillText("لحظة من فضلك", g.btn.w / 2, g.btn.h / 2 + 10);
+      } else {
+        ctx.font = font(14);
+        ctx.fillText("Please wait · لحظة من فضلك", g.btn.w / 2, g.btn.h / 2);
+      }
       return;
     }
     ui.buttons.forEach((b, i) => {
-      const { x, w } = rects[i];
+      const r = rects[i];
       const down = i === pressed;
+      const cx = r.x + r.w / 2;
+      const cy = r.y + r.h / 2;
       ctx.fillStyle = down ? b.color : PANEL;
-      roundRect(ctx, x + 3, 4, w - 6, BTN_H - 8, 10);
+      roundRect(ctx, r.x + 3, r.y + 3, r.w - 6, r.h - 6, 10);
       ctx.fillStyle = down ? "#000" : b.color;
-      if (!down) ctx.fillRect(x + 14, 6, w - 28, 2);
-      ctx.font = font(n > 3 ? 15 : 16, true);
-      ctx.fillText(fit(ctx, b.label, w - 8), x + w / 2, b.sub ? 22 : BTN_H / 2);
+      if (!down) ctx.fillRect(r.x + 14, r.y + 5, r.w - 28, 2);
+      ctx.font = font(!g.land && n > 3 ? 15 : 16, true);
+      ctx.fillText(fit(ctx, b.label, r.w - 8), cx, b.sub ? cy - 7 : cy);
       if (b.sub) {
-        ctx.font = font(n > 3 ? 12 : 13);
+        ctx.font = font(!g.land && n > 3 ? 12 : 13);
         ctx.fillStyle = down ? "#000" : GREY;
-        ctx.fillText(fit(ctx, b.sub, w - 8), x + w / 2, 41);
+        ctx.fillText(fit(ctx, b.sub, r.w - 8), cx, cy + 12);
       }
     });
   }));
@@ -351,65 +396,68 @@ function eventTime(start: string): string {
 }
 
 function listRows(): { title: string; sub: string; accent: string }[] {
+  const n = listRowCount();
   if (ui.page === "inbox") {
-    return ui.lists.mails.slice(0, ROWS).map((m) => ({
+    return ui.lists.mails.slice(0, n).map((m) => ({
       title: m.subject || "(no subject)",
       sub: m.from,
       accent: m.unread ? AMBER : GREY,
     }));
   }
-  return ui.lists.events.slice(0, ROWS).map((e) => ({ title: e.title, sub: eventTime(e.start), accent: CYAN }));
+  return ui.lists.events.slice(0, n).map((e) => ({ title: e.title, sub: eventTime(e.start), accent: CYAN }));
 }
 
 function drawList(pressed = -1) {
+  const p = geo().page;
   const rows = listRows();
   const title = ui.page === "inbox" ? "Inbox · البريد" : "Meetings · الاجتماعات";
   const empty = ui.page === "inbox" ? "No mail · لا رسائل" : "No meetings ahead · لا اجتماعات";
-  put("page", 0, FACE_Y, W, PAGE_H, paint(W, PAGE_H, (ctx) => {
+  put("page", p, paint(p.w, p.h, (ctx) => {
     ctx.textAlign = "center";
     ctx.font = font(15, true);
     ctx.fillStyle = INK;
-    ctx.fillText(title, W / 2, HEAD_H / 2);
+    ctx.fillText(title, p.w / 2, HEAD_H / 2);
     if (!rows.length) {
       ctx.font = font(15);
       ctx.fillStyle = GREY;
-      ctx.fillText(empty, W / 2, PAGE_H / 2);
+      ctx.fillText(empty, p.w / 2, p.h / 2);
       return;
     }
     rows.forEach((r, i) => {
       const y = HEAD_H + i * (ROW_H + 1);
       ctx.fillStyle = i === pressed ? "#2c4a66" : PANEL;
-      roundRect(ctx, 4, y, W - 8, ROW_H - 2, 8);
+      roundRect(ctx, 4, y, p.w - 8, ROW_H - 2, 8);
       ctx.fillStyle = r.accent;
       ctx.fillRect(4, y + 8, 3, ROW_H - 18);
       const rtl = isArabic(r.title);
       ctx.direction = rtl ? "rtl" : "ltr";
       ctx.textAlign = rtl ? "right" : "left";
-      const x = rtl ? W - 12 : 14;
+      const x = rtl ? p.w - 12 : 14;
       ctx.font = font(14, true);
       ctx.fillStyle = INK;
-      ctx.fillText(fit(ctx, r.title, W - 30), x, y + 13);
+      ctx.fillText(fit(ctx, r.title, p.w - 30), x, y + 13);
       ctx.font = font(12);
       ctx.fillStyle = r.accent;
-      ctx.fillText(fit(ctx, r.sub, W - 30), x, y + 29);
+      ctx.fillText(fit(ctx, r.sub, p.w - 30), x, y + 29);
       ctx.direction = "ltr";
     });
   }));
 }
 
 const ANSWER_LINE = 21;
-const answerRows = () => Math.floor((PAGE_H - 8) / ANSWER_LINE);
+const answerRows = () => Math.floor((geo().page.h - 8) / ANSWER_LINE);
 
 function wrap(text: string): string[] {
   const c = document.createElement("canvas").getContext("2d")!;
   c.font = font(15);
+  const max = geo().page.w - 16;
   const out: string[] = [];
   for (const para of text.split(/\n+/)) {
     let line = "";
     for (const word of para.trim().split(/\s+/)) {
       if (!word) continue;
       const next = line ? `${line} ${word}` : word;
-      if (c.measureText(next).width <= W - 16) line = next;
+      if (c.measureText(next).width <= max) line = next;
       else {
         if (line) out.push(line);
         line = word;
@@ -421,13 +469,14 @@ function wrap(text: string): string[] {
 }
 
 function drawAnswer() {
+  const p = geo().page;
   const lines = ui.answer.slice(ui.answerAt, ui.answerAt + answerRows());
-  put("page", 0, FACE_Y, W, PAGE_H, paint(W, PAGE_H, (ctx) => {
+  put("page", p, paint(p.w, p.h, (ctx) => {
     ctx.font = font(15);
     ctx.fillStyle = INK;
     ctx.direction = ui.rtl ? "rtl" : "ltr";
     ctx.textAlign = ui.rtl ? "right" : "left";
-    lines.forEach((l, i) => ctx.fillText(l, ui.rtl ? W - 8 : 8, 14 + i * ANSWER_LINE));
+    lines.forEach((l, i) => ctx.fillText(l, ui.rtl ? p.w - 8 : 8, 14 + i * ANSWER_LINE));
     ctx.direction = "ltr";
     if (ui.answer.length > answerRows()) {
       const total = Math.ceil(ui.answer.length / answerRows());
@@ -435,7 +484,7 @@ function drawAnswer() {
       ctx.font = font(11);
       ctx.fillStyle = GREY;
       ctx.textAlign = "center";
-      ctx.fillText(`${at} / ${total}`, W / 2, PAGE_H - 6);
+      ctx.fillText(`${at} / ${total}`, p.w / 2, p.h - 6);
     }
   }));
 }
@@ -500,17 +549,35 @@ function redrawAllNow() {
     sendFace();
     drawInfo();
   } else {
+    if (ui.page === "answer") ui.answer = wrap(ui.answer.join(" "));
     drawPage();
   }
   drawButtons();
 }
 
+/** Turns the picture a quarter turn: upright → on its side → upside down → other side.
+ *  The board answers with its new size, and everything is drawn again for it. */
+function turnScreen() {
+  ui.sent.clear();
+  void Bridge.faceCmd("ROT +");
+}
+
+const inside = (r: Rect, x: number, y: number) => x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h;
+
 function onTouch(x: number, y: number) {
   if (!isTouch() || !actions) return;
-  if (y >= BTN_Y - 6) {
+  const g = geo();
+  if (y < BAR_H) {
+    void Bridge.log(`screen tap ${x},${y} on the bar`);
+    if (x < TURN_W + 10) turnScreen();
+    return;
+  }
+  // A little slack around the buttons: fingers are not styluses.
+  const slack = { x: g.btn.x - (g.land ? 6 : 0), y: g.btn.y - (g.land ? 0 : 6), w: g.btn.w + 6, h: g.btn.h + 6 };
+  if (inside(slack, x, y)) {
     const rects = buttonRects();
-    let i = rects.findIndex((r) => x >= r.x && x < r.x + r.w);
-    if (i < 0) i = rects.length - 1;
+    let i = rects.findIndex((r) => inside(r, x - g.btn.x, y - g.btn.y));
+    if (i < 0) i = g.land ? (y < g.btn.y ? 0 : rects.length - 1) : (x < g.btn.x + g.btn.w / 2 ? 0 : rects.length - 1);
     const b = ui.buttons[i];
     void Bridge.log(`screen tap ${x},${y} → ${b ? b.label : "no button"}`);
     if (!b) return;
@@ -529,8 +596,8 @@ function onTouch(x: number, y: number) {
     return;
   }
   if (ui.page === "inbox" || ui.page === "agenda") {
-    const i = Math.floor((y - FACE_Y - HEAD_H) / (ROW_H + 1));
-    if (i < 0 || i >= ROWS || actions.busy()) return;
+    const i = Math.floor((y - g.page.y - HEAD_H) / (ROW_H + 1));
+    if (i < 0 || i >= listRowCount() || actions.busy()) return;
     const m = ui.page === "inbox" ? ui.lists.mails[i] : null;
     const e = ui.page === "agenda" ? ui.lists.events[i] : null;
     if (!m && !e) return;
@@ -543,7 +610,7 @@ function onTouch(x: number, y: number) {
     return;
   }
   // Home: tapping Bader starts / stops talking.
-  if (y >= FACE_Y && y < INFO_Y && (ui.mode === "idle" || ui.mode === "listening")) actions.talk();
+  if (y >= FACE_Y && y < FACE_BOTTOM && x < 240 && (ui.mode === "idle" || ui.mode === "listening")) actions.talk();
 }
 
 function onSwipe(dir: string) {

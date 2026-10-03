@@ -42,6 +42,10 @@ const VOICE_KEYS: &[&str] = &[
     "bader.quick_lane",
     "bader.quick_model",
     "bader.screen_reply",
+    // First-run setup: main + second language, and "setup finished".
+    "bader.primary_lang",
+    "bader.second_lang",
+    "bader.setup_done",
 ];
 
 /// .env keys the settings window may write.
@@ -215,6 +219,18 @@ pub async fn status() -> EngineStatus {
                 prefs.get("screen_reply").and_then(Value::as_str).unwrap_or("ask").to_string(),
             );
             v.insert(
+                "bader.primary_lang".into(),
+                prefs.get("primary_lang").and_then(Value::as_str).unwrap_or("en").to_string(),
+            );
+            v.insert(
+                "bader.second_lang".into(),
+                prefs.get("second_lang").and_then(Value::as_str).unwrap_or("ar").to_string(),
+            );
+            v.insert(
+                "bader.setup_done".into(),
+                (prefs.get("setup_done").and_then(Value::as_bool) == Some(true)).to_string(),
+            );
+            v.insert(
                 "bader.approvals".into(),
                 (prefs.get("approvals").and_then(Value::as_bool) != Some(false)).to_string(),
             );
@@ -244,7 +260,16 @@ pub fn apply(mut values: HashMap<String, String>, secrets: HashMap<String, Strin
     let quick_lane = values.remove("bader.quick_lane");
     let quick_model = values.remove("bader.quick_model");
     let screen_reply = values.remove("bader.screen_reply").filter(|v| ["ask", "text", "voice"].contains(&v.as_str()));
-    if quick_lane.is_some() || quick_model.is_some() || screen_reply.is_some() {
+    let primary = values.remove("bader.primary_lang").filter(|v| ["en", "ar"].contains(&v.as_str()));
+    let second = values.remove("bader.second_lang").filter(|v| ["en", "ar", "none"].contains(&v.as_str()));
+    let setup_done = values.remove("bader.setup_done");
+    if quick_lane.is_some()
+        || quick_model.is_some()
+        || screen_reply.is_some()
+        || primary.is_some()
+        || second.is_some()
+        || setup_done.is_some()
+    {
         let path = dir.join("bader_prefs.json");
         let mut cur: Value = std::fs::read_to_string(&path)
             .ok()
@@ -258,6 +283,15 @@ pub fn apply(mut values: HashMap<String, String>, secrets: HashMap<String, Strin
         }
         if let Some(r) = screen_reply {
             cur["screen_reply"] = Value::String(r);
+        }
+        if let Some(l) = primary {
+            cur["primary_lang"] = Value::String(l);
+        }
+        if let Some(l) = second {
+            cur["second_lang"] = Value::String(l);
+        }
+        if let Some(d) = setup_done {
+            cur["setup_done"] = Value::Bool(d == "true");
         }
         std::fs::write(&path, serde_json::to_string_pretty(&cur).unwrap_or_default())
             .map_err(|e| format!("Could not save preferences: {e}"))?;
@@ -440,4 +474,13 @@ mod tests {
         assert!(!t.contains("A=1"));
         assert!(env_present(&t, "OPENAI_API_KEY") && !env_present(&t, "A"));
     }
+}
+
+/// True until the first-run setup has been finished (or skipped).
+pub fn needs_setup() -> bool {
+    let prefs: Value = std::fs::read_to_string(home().join("bader_prefs.json"))
+        .ok()
+        .and_then(|t| serde_json::from_str(&t).ok())
+        .unwrap_or(Value::Null);
+    prefs.get("setup_done").and_then(Value::as_bool) != Some(true)
 }

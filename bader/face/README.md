@@ -65,6 +65,8 @@ The bigger screen. With both screens plugged in, the app uses this one.
 - **Mail** and **Meetings** pages: tap a row and Bader explains that email / meeting.
 - After an answer: the full text on the screen (tap or swipe for the next page).
 - Approvals: **Approve / Deny** buttons. While listening: **Send / Cancel**. While speaking: **Stop**.
+- The small turn icon at the left of the top bar turns the picture a quarter turn
+  (upright → on its side → upside down → other side); on its side the buttons run down the right.
 - Swipe left/right on the home page: Home → Meetings → Mail.
 
 **Files**
@@ -92,7 +94,7 @@ Hold the BOOT button for a second to calibrate again.
 - `FACE <name> [seconds]` — picture in the face area; then back to the idle pose (`IDLE` is sent)
 - `IMG <x> <y> <w> <h> <n>` + n bytes — RLE picture of a region (≤ 16 rows, ≤ 4000 bytes;
   byte c < 128: c+1 literal pixels, c ≥ 128: next pixel × (c−126); pixels are RGB565 big-endian)
-- `POSES on|off` · `LED r g b [pulse]` · `BEEP hz ms` · `BL percent` · `CAL` · `ROT 0|1` · `INV 0|1` · `EXIT`
+- `POSES on|off` · `LED r g b [pulse]` · `BEEP hz ms` · `BL percent` · `CAL` · `ROT 0-3|+` (quarter turns; answers with the new size) · `INV 0|1` · `EXIT`
 - Board → app: `TOUCH x y` · `SWIPE left|right|up|down` · `BTN short|long` · `IDLE` · `READY`
 
 Pins: LCD SCK 14, MOSI 13, MISO 12, CS 15, DC 2, backlight 21 · touch (XPT2046) CLK 25,

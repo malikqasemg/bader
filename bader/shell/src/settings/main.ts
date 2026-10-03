@@ -6,7 +6,7 @@ import "./settings.css";
 import { Bridge, onEvent, type HookStatus } from "../core/bridge";
 import { DEFAULT_SETTINGS, type Settings } from "../core/state";
 import { h, clear } from "../views/dom";
-import { aiSection, languageSection, phoneSection, voiceSection } from "./engine";
+import { aiSection, languageSection, phoneSection, setupSection, voiceSection } from "./engine";
 import { accountsSection } from "./accounts";
 
 let settings: Settings = { ...DEFAULT_SETTINGS };
@@ -423,11 +423,13 @@ async function main() {
   const present: Record<string, boolean> = {};
   for (const k of keys) present[k] = (await Bridge.secretPresent(k)) ?? false;
 
+  const setup = setupSection(engine);
   void status; // hooks panel hidden (see bottom)
   void present; // integrations panel hidden
   clear(root);
   root.append(
     h("h1", {}, h("span", { text: "Bader" }), h("span", { class: "version", text: version })),
+    ...(setup ? [setup] : []),
     keySection("bader-license-key", "Licence  ·  الترخيص", "Licence key", "BADR-XXXX-XXXX", "No licence yet — paid skills stay locked.", hasLicense),
     accountsSection(),
     aiSection(engine),

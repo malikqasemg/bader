@@ -14,8 +14,9 @@ class Display:
         self.cs = Pin(15, Pin.OUT, value=1)
         self.dc = Pin(2, Pin.OUT, value=1)
         self.bl = PWM(Pin(21), freq=1000, duty=0)
-        self.rot = rot
+        self.rot = rot & 3
         self.inv = inv
+        self.w, self.h = (H, W) if rot & 1 else (W, H)
         self._win = bytearray(4)
         self.init()
 
@@ -47,9 +48,10 @@ class Display:
         self.cmd(0x29)
 
     def orient(self, rot, inv):
-        self.rot, self.inv = rot, inv
-        # Portrait; rot=1 turns the picture upside down. BGR panel.
-        self.cmd(0x36, bytes((0x88 if rot else 0x48,)))
+        """rot: quarter turns (0 upright, 1 on its side, 2 upside down, 3 other side)."""
+        self.rot, self.inv = rot & 3, inv
+        self.w, self.h = (H, W) if self.rot & 1 else (W, H)
+        self.cmd(0x36, bytes(((0x48, 0x28, 0x88, 0xE8)[self.rot],)))  # BGR panel
         self.cmd(0x21 if inv else 0x20)
 
     def backlight(self, level):

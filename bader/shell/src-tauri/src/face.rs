@@ -31,7 +31,7 @@ const VIDS: [u16; 3] = [0x303A, 0x1A86, 0x10C4];
 const ESPRESSIF_VID: u16 = 0x303A;
 /// The v3 board's buffers: compressed bytes per IMG, pixels (×2 bytes) per IMG.
 const MAX_IN: usize = 4000;
-const MAX_OUT: usize = 240 * 16 * 2;
+const MAX_OUT: usize = 240 * 16 * 2; // = 12 rows of a 320-wide (sideways) screen
 
 #[derive(Serialize, Clone, Copy, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -108,7 +108,7 @@ impl Face {
     /// A few harmless device settings the island may send as they are.
     pub fn command(&self, line: &str) -> Result<(), String> {
         let l = line.trim();
-        let ok = ["POSES on", "POSES off", "CAL"].contains(&l)
+        let ok = ["POSES on", "POSES off", "CAL", "ROT +", "ROT 0", "ROT 1", "ROT 2", "ROT 3"].contains(&l)
             || ["BEEP ", "BL "].iter().any(|p| {
                 l.strip_prefix(p).is_some_and(|rest| rest.split(' ').all(|n| n.parse::<u16>().is_ok()))
             });
@@ -242,7 +242,21 @@ fn spawn_reader(app: AppHandle, port: &Port, acks: Sender<bool>) {
                 Ok(0) => return,
                 Ok(_) => {
                     let l = line.trim();
-                    if l == "OK" || l.starts_with("PONG") {
+                    if l.starts_with("PONG") {
+                        // Also the answer to "turn the picture": the size may have changed.
+                        if let Some(now) = parse_pong(l) {
+                            let changed = {
+                                let mut cur = INFO.lock().unwrap();
+                                let changed = *cur != Some(now);
+                                *cur = Some(now);
+                                changed
+                            };
+                            if changed {
+                                let _ = app.emit_to(crate::island::WINDOW_LABEL, "face-ready", Some(now));
+                            }
+                        }
+                        let _ = acks.send(true);
+                    } else if l == "OK" {
                         let _ = acks.send(true);
                     } else if l.starts_with("ERR") {
                         crate::log::line(format!("face screen: {l}"));
@@ -319,7 +333,7 @@ impl Link {
         match m {
             Msg::Line(l) if self.info.proto >= 3 => self.acked(l, &[]),
             Msg::Line(l) => {
-                if l.starts_with("POSES") || l.starts_with("BEEP") || l == "CAL" {
+                if l.starts_with("POSES") || l.starts_with("BEEP") || l.starts_with("ROT") || l == "CAL" {
                     return Ok(true); // v3 only
                 }
                 self.port.write_all(format!("{l}\n").as_bytes())?;
@@ -338,7 +352,8 @@ impl Link {
                 Ok(true)
             }
             Msg::Img { x, y, w, h, data } => {
-                if self.info.proto < 3 || x + w > self.info.w || y + h > self.info.h {
+                let size = info().unwrap_or(self.info);
+                if self.info.proto < 3 || x + w > size.w || y + h > size.h {
                     return Ok(true);
                 }
                 let row = *w as usize * 2;

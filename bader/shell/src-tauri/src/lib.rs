@@ -666,6 +666,14 @@ pub fn run() {
             hotkey::start(handle.clone());
             // Before the island: see create_settings_window.
             create_settings_window(&handle);
+            // First run: the set-up wizard (languages, AI key, voice) opens by itself.
+            if engine::needs_setup() {
+                let h2 = handle.clone();
+                tauri::async_runtime::spawn(async move {
+                    tokio::time::sleep(std::time::Duration::from_millis(1500)).await;
+                    show_settings_window(&h2);
+                });
+            }
 
             if let Some(win) = island::window(&handle) {
                 island::make_non_activating(&win);

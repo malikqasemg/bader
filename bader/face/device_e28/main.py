@@ -4,13 +4,13 @@
 # lists — so Arabic renders properly) and the board reports touches.
 #
 # App -> board, one line per command; every command answers OK or ERR <why>:
-#   PING                      -> PONG bader-face 3.0 240 320 touch
+#   PING                      -> PONG bader-face 3.0 <w> <h> touch   (240 320 upright, 320 240 on its side)
 #   FACE <name> [seconds]     picture in the face area (y 28..203); then back to idle
 #   IMG <x> <y> <w> <h> <n>   + n bytes: RLE picture of a region (see unrle)
 #   POSES on|off              rotate idle poses (off while a page covers the face)
 #   LED <r> <g> <b> [pulse]   RGB light       BEEP <hz> <ms>    BL <percent>
 #   CAL                       touch calibration (4 taps)
-#   ROT 0|1 · INV 0|1         flip the picture / invert colours (saved)
+#   ROT 0-3|+ · INV 0|1       turn the picture by quarter turns / invert colours (saved)
 #   EXIT                      stop (drops to the MicroPython prompt)
 # Board -> app:
 #   TOUCH <x> <y> · SWIPE left|right|up|down · BTN short|long (BOOT) · IDLE · READY
@@ -118,9 +118,17 @@ class Touch:
             return None
         c = cfg.get("cal") or {"swap": 0, "ax": -0.0667, "bx": 255, "ay": 0.0889, "by": -18}
         u, v = (r[1], r[0]) if c["swap"] else r
-        x = int(c["ax"] * u + c["bx"])
-        y = int(c["ay"] * v + c["by"])
-        return max(0, min(W - 1, x)), max(0, min(H - 1, y))
+        # Calibrated for the upright picture; turn the point with the picture.
+        px = max(0, min(W - 1, int(c["ax"] * u + c["bx"])))
+        py = max(0, min(H - 1, int(c["ay"] * v + c["by"])))
+        rot = d.rot
+        if rot == 1:
+            return py, W - 1 - px
+        if rot == 2:
+            return W - 1 - px, H - 1 - py
+        if rot == 3:
+            return H - 1 - py, px
+        return px, py
 
 
 touch = Touch()
@@ -134,7 +142,7 @@ def save_cfg():
 # ── drawing helpers ──────────────────────────────────────────────────────────
 def text(msg, x, y, color=0xFFFF):
     """Small built-in font (set-up screens only; the app draws the real text)."""
-    w = min(len(msg) * 8, W)
+    w = min(len(msg) * 8, d.w)
     n = w * 8 * 2
     fb = framebuf.FrameBuffer(out_mv[:n], w, 8, framebuf.RGB565)
     fb.fill(0)
@@ -255,6 +263,8 @@ def solve_cal(raw):
 
 def calibrate(poll_serial, timeout_ms=45_000):
     state["busy"] = True
+    turned = d.rot
+    d.orient(0, d.inv)  # the crosses and the maths are for the upright picture
     pts = ((20, 20), (220, 20), (220, 300), (20, 300))
     ok = False
     for attempt in range(3):
@@ -282,6 +292,7 @@ def calibrate(poll_serial, timeout_ms=45_000):
             ok = True
             break
     d.fill_rect(0, 0, W, H, 0)
+    d.orient(turned, d.inv)
     state["busy"] = False
     state["face"] = None
     go_idle()
@@ -296,7 +307,7 @@ def handle(line, poll_serial):
         return
     cmd = parts[0].upper()
     if cmd == "PING":
-        print("PONG bader-face", VERSION, W, H, "touch")
+        print("PONG bader-face", VERSION, d.w, d.h, "touch")
         return
     if cmd == "IMG" and len(parts) >= 6:
         x, y, w, h, n = (int(p) for p in parts[1:6])
@@ -307,7 +318,7 @@ def handle(line, poll_serial):
         if state["busy"]:
             print("OK")
             return
-        if x < 0 or y < 0 or w <= 0 or h <= 0 or x + w > W or y + h > H or w * h * 2 > MAX_OUT:
+        if x < 0 or y < 0 or w <= 0 or h <= 0 or x + w > d.w or y + h > d.h or w * h * 2 > MAX_OUT:
             print("ERR rect")
             return
         if unrle(rx, n, out, MAX_OUT) != w * h * 2:
@@ -348,10 +359,20 @@ def handle(line, poll_serial):
         beep(int(parts[1]) if len(parts) > 1 else 1800, min(int(parts[2]) if len(parts) > 2 else 25, 400))
     elif cmd == "BL" and len(parts) >= 2:
         d.backlight(int(parts[1]) / 100)
-    elif cmd in ("ROT", "INV") and len(parts) >= 2:
-        cfg[cmd.lower()] = 1 if parts[1] == "1" else 0
+    elif cmd == "ROT" and len(parts) >= 2:
+        # Quarter turns: 0 upright, 1 on its side, 2 upside down, 3 other side; "+" = next.
+        cfg["rot"] = (d.rot + 1) % 4 if parts[1] == "+" else int(parts[1]) & 3
         save_cfg()
-        d.orient(cfg.get("rot", 0), cfg.get("inv", 0))
+        d.orient(cfg["rot"], d.inv)
+        d.fill_rect(0, 0, d.w, d.h, 0)
+        state["face"] = None
+        # The new size is the answer: the app redraws everything for it.
+        print("PONG bader-face", VERSION, d.w, d.h, "touch")
+        return
+    elif cmd == "INV" and len(parts) >= 2:
+        cfg["inv"] = 1 if parts[1] == "1" else 0
+        save_cfg()
+        d.orient(d.rot, cfg["inv"])
     elif cmd == "CAL":
         print("OK")
         calibrate(poll_serial)
@@ -401,7 +422,7 @@ def main():
                 if len(line) > 120:
                     line = bytearray()
 
-    d.fill_rect(0, 0, W, H, 0)
+    d.fill_rect(0, 0, d.w, d.h, 0)
     d.backlight(0.9)
     set_led((0, 0, 0))
     # Pictures are binary, so Ctrl-C must be plain data while the app talks to

@@ -389,3 +389,111 @@ export function phoneSection(status: EngineStatus): HTMLElement {
     feedback,
   );
 }
+
+// ── First-run setup ───────────────────────────────────────────────────────────
+
+/** One card, shown until it is finished or skipped: languages, AI key, voice. */
+export function setupSection(status: EngineStatus): HTMLElement | null {
+  if ((status.values["bader.setup_done"] ?? "false") === "true") return null;
+  const LANG: [string, string][] = [["en", "English"], ["ar", "العربية · Arabic"]];
+  const primary = select(LANG, status.values["bader.primary_lang"] || "en");
+  const second = select([...LANG, ["none", "None · لا شيء"]], status.values["bader.second_lang"] || "ar");
+  const provider = select(
+    [
+      ["openai", "OpenAI — one key for answers and voice"],
+      ["openrouter", "OpenRouter — any model"],
+      ["anthropic", "Anthropic (Claude)"],
+    ],
+    status.values["model.provider"] || "openrouter",
+  );
+  const key = h("input", { type: "password", autocomplete: "off", spellcheck: "false", style: "flex:1 1 auto;min-width:0" }) as HTMLInputElement;
+  const model = h("input", { type: "text", spellcheck: "false", value: status.values["model.default"] ?? "", style: "flex:1 1 auto;min-width:0" }) as HTMLInputElement;
+  const voice = select(
+    [
+      ["local", "On this computer + free online voice (no key)"],
+      ["cloud", "Cloud voice (OpenAI key)"],
+    ],
+    status.values["stt.provider"] === "openai" ? "cloud" : "local",
+  );
+  const voiceKey = h("input", { type: "password", autocomplete: "off", spellcheck: "false", placeholder: "OpenAI key for voice (sk-...)", style: "flex:1 1 auto;min-width:0" }) as HTMLInputElement;
+  const voiceKeyRow = h("div", { class: "row" }, h("label", { text: "Voice key" }), voiceKey);
+  const feedback = h("div", {});
+
+  const sync = () => {
+    const p = PROVIDERS[provider.value];
+    const has = status.keys[p.envKey] ?? false;
+    key.placeholder = has ? "••••••••••••  (already saved)" : p.keyHint;
+    model.placeholder = p.modelHint;
+    // With an OpenAI key for answers, the same key does the voice.
+    voiceKeyRow.style.display = voice.value === "cloud" && provider.value !== "openai" ? "" : "none";
+    if (second.value === primary.value) second.value = primary.value === "en" ? "ar" : "en";
+  };
+  provider.addEventListener("change", () => {
+    if (provider.value !== (status.values["model.provider"] || "")) model.value = "";
+    sync();
+  });
+  voice.addEventListener("change", sync);
+  primary.addEventListener("change", sync);
+  second.addEventListener("change", sync);
+  sync();
+
+  const finish = async (skip: boolean) => {
+    const values: Record<string, string> = { "bader.setup_done": "true" };
+    const secrets: Record<string, string> = {};
+    if (!skip) {
+      const p = PROVIDERS[provider.value];
+      const hasKey = (status.keys[p.envKey] ?? false) || key.value.trim() !== "";
+      if (!hasKey) return notice(feedback, false, "Paste the API key first.");
+      if (!model.value.trim()) return notice(feedback, false, "Type the model name.");
+      const cloud = voice.value === "cloud";
+      const vKey = provider.value === "openai" ? key.value.trim() : voiceKey.value.trim();
+      if (cloud && !vKey && !(status.keys["VOICE_TOOLS_OPENAI_KEY"] ?? false) && !(provider.value === "openai" && (status.keys[p.envKey] ?? false))) {
+        return notice(feedback, false, "Cloud voice needs an OpenAI key.");
+      }
+      Object.assign(values, {
+        "bader.primary_lang": primary.value,
+        "bader.second_lang": second.value,
+        // One language only: always answer in it. Two: answer in the one used.
+        "bader.answer_lang": second.value === "none" ? primary.value : "auto",
+        "model.provider": provider.value,
+        "model.base_url": p.baseUrl,
+        "model.default": model.value.trim(),
+        "stt.enabled": "true",
+        "stt.provider": cloud ? "openai" : "local",
+        "tts.provider": cloud ? "openai" : "edge",
+        "voice.auto_tts": "true",
+      });
+      if (key.value.trim()) secrets[p.envKey] = key.value.trim();
+      if (cloud && vKey) secrets["VOICE_TOOLS_OPENAI_KEY"] = vKey;
+    }
+    notice(feedback, true, "Saving…");
+    try {
+      await Bridge.engineApply(values, secrets, !skip);
+      window.location.reload();
+    } catch (err) {
+      notice(feedback, false, `Could not save: ${String(err)}`);
+    }
+  };
+  const done = h("button", { class: "primary", text: "Finish set-up · إنهاء الإعداد" }) as HTMLButtonElement;
+  const skip = h("button", { text: "Skip" }) as HTMLButtonElement;
+  done.addEventListener("click", () => void finish(false));
+  skip.addEventListener("click", () => void finish(true));
+
+  return h(
+    "section",
+    { style: "border:1px solid #40e0ff55" },
+    h("h2", {}, dot(false), h("span", { text: "Welcome — set up Bader  ·  إعداد بدر" })),
+    h("span", { class: "hint", text: "1 · Languages. Bader listens and answers in these." }),
+    h("div", { class: "row" }, h("label", { text: "Main language" }), primary),
+    h("div", { class: "row" }, h("label", { text: "Second language" }), second),
+    h("span", { class: "hint", text: "2 · The AI service that answers. An OpenAI key can do the voice too." }),
+    h("div", { class: "row" }, h("label", { text: "AI service" }), provider),
+    h("div", { class: "row" }, h("label", { text: "API key" }), key),
+    h("div", { class: "row" }, h("label", { text: "Model" }), model),
+    h("span", { class: "hint", text: "3 · Voice. On this computer: nothing you say leaves it; replies use a free online voice. Cloud: your speech and replies go through OpenAI." }),
+    h("div", { class: "row" }, h("label", { text: "Voice" }), voice),
+    voiceKeyRow,
+    h("div", { class: "row" }, done, skip),
+    feedback,
+  );
+}

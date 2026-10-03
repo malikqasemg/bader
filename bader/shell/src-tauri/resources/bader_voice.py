@@ -88,6 +88,20 @@ def _stt_config():
         return "local", "small"
 
 
+def _languages():
+    """The languages Bader listens for: main + second language from set-up."""
+    main, second = "en", "ar"
+    try:
+        with open(os.path.join(os.environ.get("HERMES_HOME", ""), "bader_prefs.json"), encoding="utf-8") as f:
+            prefs = json.load(f)
+        main = prefs.get("primary_lang") or main
+        second = prefs.get("second_lang") or second
+    except Exception:
+        pass
+    langs = [l for l in (main, second) if l in ("ar", "en")]
+    return list(dict.fromkeys(langs)) or ["en", "ar"]
+
+
 def _local_stt(path, name):
     """On-device speech-to-text, Arabic or English only.
 
@@ -100,13 +114,17 @@ def _local_stt(path, name):
         _STT["model"] = WhisperModel(name, device="cpu", compute_type="float32", cpu_threads=threads)
         _STT["name"] = name
     model = _STT["model"]
+    allowed = _languages()
     # The assistant's name, so "Bader" is not heard as "better".
     opts = {"beam_size": 1, "vad_filter": True, "hotwords": "Bader بدر"}
+    if len(allowed) == 1:  # one language only: no guessing at all
+        segments, info = model.transcribe(path, language=allowed[0], **opts)
+        return " ".join(s.text.strip() for s in segments).strip(), allowed[0]
     segments, info = model.transcribe(path, **opts)
     language = info.language
-    if language not in ("ar", "en"):
+    if language not in allowed:
         probs = dict(info.all_language_probs or [])
-        language = max(("ar", "en"), key=lambda l: probs.get(l, 0.0))
+        language = max(allowed, key=lambda l: probs.get(l, 0.0))
         segments, info = model.transcribe(path, language=language, **opts)
     return " ".join(s.text.strip() for s in segments).strip(), language
 
