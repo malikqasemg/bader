@@ -288,6 +288,31 @@ fn face_strip(face: State<face::Face>, y: u16, h: u16, idle: bool, data: String)
     face.strip(y, h, idle, bytes)
 }
 
+/// A picture of a screen region for the touch face (RGB565, base64).
+#[tauri::command]
+fn face_img(face: State<face::Face>, x: u16, y: u16, w: u16, h: u16, data: String) -> Result<(), String> {
+    use base64::Engine;
+    let bytes = base64::engine::general_purpose::STANDARD.decode(data).map_err(|e| e.to_string())?;
+    face.img(x, y, w, h, bytes)
+}
+
+/// Which face screen is plugged in (size, touch), if any.
+#[tauri::command]
+fn face_info() -> Option<face::Info> {
+    face::info()
+}
+
+#[tauri::command]
+fn face_cmd(face: State<face::Face>, line: String) -> Result<(), String> {
+    face.command(&line)
+}
+
+/// Unread mail and upcoming meetings for the face screen's pages.
+#[tauri::command]
+fn snapshot_lists() -> sync::Lists {
+    sync::lists()
+}
+
 #[tauri::command]
 fn face_led(face: State<face::Face>, r: u8, g: u8, b: u8, pulse: bool) {
     face.led(r, g, b, pulse);
@@ -585,6 +610,10 @@ pub fn run() {
             face_set,
             face_strip,
             face_led,
+            face_img,
+            face_info,
+            face_cmd,
+            snapshot_lists,
             run_approve,
             sync_now,
             snapshot_info,

@@ -24,6 +24,19 @@ export type FaceName =
   | "idle" | "neutral" | "listening" | "working" | "approval" | "thinking" | "speaking"
   | "happy" | "concerned" | "surprised" | "celebrating";
 
+/** The face screen that is plugged in: proto 2 = small screen, 3 = touch screen. */
+export interface FaceInfo {
+  w: number;
+  h: number;
+  touch: boolean;
+  proto: number;
+}
+
+export interface SnapshotLists {
+  mails: { from: string; subject: string; unread: boolean }[];
+  events: { title: string; start: string }[];
+}
+
 export interface SnapshotInfo {
   unread: number;
   mails: number;
@@ -140,6 +153,12 @@ export const Bridge = {
   /** Full-width RGB565 strip (base64) at y on the face screen; idle = keep under idle poses. */
   faceStrip: (y: number, h: number, idle: boolean, data: string) => call<void>("face_strip", { y, h, idle, data }),
   faceLed: (r: number, g: number, b: number, pulse = false) => call<void>("face_led", { r, g, b, pulse }),
+  /** Picture of a region (RGB565, base64) for the touch face screen. */
+  faceImg: (x: number, y: number, w: number, h: number, data: string) => call<void>("face_img", { x, y, w, h, data }),
+  faceInfo: () => call<FaceInfo | null>("face_info"),
+  faceCmd: (line: string) => call<void>("face_cmd", { line }),
+  snapshotLists: () => call<SnapshotLists>("snapshot_lists"),
+  voiceCancel: () => call<void>("voice_cancel"),
 
   // ── Runs: approvals, snapshot ─────────────────────────────────────────────
   /** "once" approves what Bader is waiting on, "deny" refuses it. */
@@ -152,7 +171,6 @@ export const Bridge = {
   voiceStart: () => callOrThrow<void>("voice_start"),
   /** Stops the mic and returns what was said (Arabic or English). */
   voiceStop: () => callOrThrow<{ text: string; language: string }>("voice_stop"),
-  voiceCancel: () => call<void>("voice_cancel"),
   /** Bader's spoken reply as a data URL. */
   voiceSpeak: (text: string) => callOrThrow<string>("voice_speak", { text }),
   /** Screenshot of the main display for one question; returns its path. */

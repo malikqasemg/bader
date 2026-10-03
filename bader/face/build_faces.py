@@ -131,6 +131,38 @@ def build(src_dir, out_dir):
         face_screen(src, out_dir, name, en, arabic, accent, en_f, ar_f)
 
 
+# ── 2.8" touch screen (240x320): pictures for the face area only (240x176) ──
+E28_W, E28_H = 240, 176
+E28_HEADS = ["neutral", "listening", "thinking", "speaking", "happy", "concerned", "surprised", "celebrating"]
+
+
+def e28_picture(src, out_dir, name, pad):
+    art = Image.open(src).convert("RGBA")
+    art = art.crop(art.getbbox())
+    scale = min((E28_W - 2 * pad) / art.width, (E28_H - 2 * pad) / art.height)
+    art = art.resize((int(art.width * scale), int(art.height * scale)), Image.LANCZOS)
+    canvas = Image.new("RGB", (E28_W, E28_H), BG)
+    canvas.paste(art, ((E28_W - art.width) // 2, (E28_H - art.height) // 2), art)
+    save(canvas, out_dir, name)
+
+
+def build_e28(src_dir, out_dir):
+    """The app draws all text on this screen, so these are pictures only."""
+    os.makedirs(out_dir, exist_ok=True)
+    idle = os.path.join(src_dir, "idle.png")
+    if os.path.isfile(idle):
+        e28_picture(idle, out_dir, "idle", 2)
+    for pose in sorted(glob.glob(os.path.join(src_dir, "poses", "*.png"))):
+        stem = os.path.splitext(os.path.basename(pose))[0].replace("-", "_")
+        e28_picture(pose, out_dir, f"pose_{stem}", 2)
+    for name in E28_HEADS:
+        src = os.path.join(src_dir, f"{name}.png")
+        if os.path.isfile(src):
+            e28_picture(src, out_dir, name, 4)
+
+
 if __name__ == "__main__":
     here = os.path.dirname(os.path.abspath(__file__))
-    build(sys.argv[1] if len(sys.argv) > 1 else os.path.join(here, "art"), os.path.join(here, "faces"))
+    art_dir = sys.argv[1] if len(sys.argv) > 1 else os.path.join(here, "art")
+    build(art_dir, os.path.join(here, "faces"))
+    build_e28(art_dir, os.path.join(here, "faces_e28"))

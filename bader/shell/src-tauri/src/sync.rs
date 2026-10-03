@@ -77,6 +77,79 @@ pub fn info() -> Option<SnapshotInfo> {
     })
 }
 
+#[derive(Serialize, Clone, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct MailRow {
+    pub from: String,
+    pub subject: String,
+    pub unread: bool,
+}
+
+#[derive(Serialize, Clone, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct EventRow {
+    pub title: String,
+    pub start: String,
+}
+
+#[derive(Serialize, Clone, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct Lists {
+    pub mails: Vec<MailRow>,
+    pub events: Vec<EventRow>,
+}
+
+/// Sender's name without the address: `"Ann Lee" <ann@x.com>` → `Ann Lee`.
+fn sender_name(from: &str) -> String {
+    let name = from.split('<').next().unwrap_or(from).trim().trim_matches('"').trim();
+    if name.is_empty() { from.trim_matches(|c| c == '<' || c == '>').to_string() } else { name.to_string() }
+}
+
+/// The newest unread mail (then read mail) and the meetings still ahead.
+pub fn lists() -> Lists {
+    let Some(v) = std::fs::read_to_string(crate::engine::home().join("bader_inbox.json"))
+        .ok()
+        .and_then(|raw| serde_json::from_str::<Value>(&raw).ok())
+    else {
+        return Lists::default();
+    };
+    let s = |m: &Value, k: &str| m.get(k).and_then(Value::as_str).unwrap_or("").to_string();
+    let mut mails: Vec<MailRow> = v
+        .get("gmail")
+        .and_then(Value::as_array)
+        .map(|a| {
+            a.iter()
+                .map(|m| MailRow {
+                    from: sender_name(&s(m, "from")),
+                    subject: s(m, "subject"),
+                    unread: m.get("unread").and_then(Value::as_bool) == Some(true),
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    mails.sort_by_key(|m| !m.unread); // stable: unread first, newest first inside each group
+    mails.truncate(12);
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0);
+    let mut events: Vec<(i64, EventRow)> = v
+        .get("calendar")
+        .and_then(Value::as_array)
+        .map(|a| {
+            a.iter()
+                .filter(|e| e.get("end").and_then(Value::as_str).and_then(epoch_of).is_some_and(|end| end > now))
+                .map(|e| {
+                    let start = s(e, "start");
+                    (epoch_of(&start).unwrap_or(i64::MAX), EventRow { title: s(e, "title"), start })
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    events.sort_by_key(|(t, _)| *t);
+    Lists { mails, events: events.into_iter().take(12).map(|(_, e)| e).collect() }
+}
+
 /// Seconds since the epoch for "2026-10-01T18:00:00+03:00" (RFC 3339, with offset).
 fn epoch_of(s: &str) -> Option<i64> {
     let b = s.as_bytes();

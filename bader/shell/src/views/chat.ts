@@ -4,7 +4,7 @@
 import { h, svg, clear } from "./dom";
 import { ICONS } from "./icons";
 import { Bridge, onEvent, type ChatContext, type RunEvent, type SnapshotInfo } from "../core/bridge";
-import { idleLines, stripIdle, stripNow, toolLabel } from "./facescreen";
+import { idleLines, initFace, setFace, showAnswer, stripIdle, stripNow, toolLabel } from "./facescreen";
 import { Sound } from "../core/sound";
 import { State, type ChatMessage } from "../core/state";
 import type { ViewHost } from "./views";
@@ -101,7 +101,7 @@ export function buildPrompt(onHeightChange: () => void): ViewHost {
     );
     approvalRow.style.display = "";
     onHeightChange();
-    void Bridge.face("approval");
+    setFace("approval");
     stripNow([
       { text: what, color: "#ffc440", size: 14 },
       { text: "Press = Yes · Hold = No", color: "#96a0aa", size: 13 },
@@ -117,10 +117,10 @@ export function buildPrompt(onHeightChange: () => void): ViewHost {
     onHeightChange();
     void Bridge.faceLed(0, 0, 0);
     if (choice === "deny") {
-      void Bridge.face("concerned", 3);
+      setFace("concerned", 3);
       stripNow([{ text: "Cancelled · أُلغي", color: "#f4505e" }]);
     } else if (choice) {
-      void Bridge.face("working");
+      setFace("working");
       stripNow([{ text: "Approved · تمت الموافقة", color: "#50dc78" }]);
     }
   }
@@ -129,7 +129,7 @@ export function buildPrompt(onHeightChange: () => void): ViewHost {
     if (ev.kind === "tool") {
       const label = toolLabel(ev.tool, ev.text);
       runStatus = label.en;
-      void Bridge.face("working");
+      setFace("working");
       stripNow([
         { text: label.en, color: "#ffc440", size: 15 },
         { text: label.ar, color: "#ebeef2", size: 15 },
@@ -144,7 +144,7 @@ export function buildPrompt(onHeightChange: () => void): ViewHost {
   });
 
   // ── Idle screen: next meeting + unread mail, refreshed by the background sync ──
-  const paintIdle = (info: SnapshotInfo | null) => stripIdle(idleLines(info));
+  const paintIdle = (info: SnapshotInfo | null) => stripIdle(idleLines(info), info?.unread ?? 0);
   void Bridge.snapshotInfo().then((i) => paintIdle(i ?? null));
   void onEvent<SnapshotInfo>("bader-snapshot", (i) => paintIdle(i));
   window.setInterval(() => void Bridge.snapshotInfo().then((i) => paintIdle(i ?? null)), 60_000);
@@ -204,14 +204,14 @@ export function buildPrompt(onHeightChange: () => void): ViewHost {
     if (playing) return;
     playing = true;
     const gen = speechGen;
-    void Bridge.face("speaking");
+    setFace("speaking");
     while (synthQueue.length && gen === speechGen) {
       const url = await synthQueue.shift()!;
       if (url && gen === speechGen) await playUrl(url, gen);
     }
     if (gen === speechGen) {
       playing = false;
-      if (!streaming) void Bridge.face("happy", 3);
+      if (!streaming) setFace("happy", 3);
     }
   }
 
@@ -266,7 +266,7 @@ export function buildPrompt(onHeightChange: () => void): ViewHost {
         stopSpeech();
         await Bridge.voiceStart();
         recording = true;
-        void Bridge.face("listening");
+        setFace("listening");
         input.placeholder = "Listening… tap ■ to send · أستمع…";
       } catch (err) {
         State.noteMessage = String(err).replace(/^Error:\s*/, "");
@@ -278,7 +278,7 @@ export function buildPrompt(onHeightChange: () => void): ViewHost {
     }
     recording = false;
     listening = true;
-    void Bridge.face("thinking");
+    setFace("thinking");
     input.placeholder = "Understanding… · جارٍ الفهم…";
     setMic();
     try {
@@ -307,6 +307,34 @@ export function buildPrompt(onHeightChange: () => void): ViewHost {
     performance.now() < readUntil;
 
   // ── Push-to-talk: hold Control+Option (Mac) / Ctrl+Alt (Windows) ──
+  // ── Touch screen: Talk / Send / Cancel / Stop / Approve / tap a mail or meeting ──
+  initFace({
+    talk: () => {
+      window.dispatchEvent(new Event("bader-open-chat"));
+      void toggleMic();
+    },
+    cancelTalk: () => {
+      if (!recording) return;
+      recording = false;
+      void Bridge.voiceCancel();
+      input.placeholder = "";
+      setMic();
+      setFace("idle");
+    },
+    stopSpeaking: () => {
+      stopSpeech();
+      setFace("idle");
+    },
+    approve: (choice) => void Bridge.runApprove(choice).catch((err) => console.error("[bader] approval failed", err)),
+    ask: (query) => {
+      if (sending || recording || listening) return;
+      window.dispatchEvent(new Event("bader-open-chat"));
+      input.value = query;
+      void submit(true);
+    },
+    busy: () => sending || recording || listening,
+  });
+
   let pttStarted = false;
   void onEvent<string>("ptt", (kind) => {
     if (kind === "down") {
@@ -348,7 +376,7 @@ export function buildPrompt(onHeightChange: () => void): ViewHost {
     State.notify();
     onHeightChange();
     runStatus = "";
-    void Bridge.face("thinking");
+    setFace("thinking");
 
     const file = State.droppedFile;
     let context: ChatContext | null =
@@ -366,6 +394,7 @@ export function buildPrompt(onHeightChange: () => void): ViewHost {
     try {
       const reply = await Bridge.chatSend(query, context);
       readUntil = performance.now() + 30_000;
+      showAnswer(plain(reply.text));
       if (State.mode !== "expanded" || !document.hasFocus()) {
         const first = plain(reply.text).replace(/\s+/g, " ").trim();
         void Bridge.notify("Bader", first.length > 140 ? first.slice(0, 137) + "…" : first).catch(() => {});
@@ -388,15 +417,15 @@ export function buildPrompt(onHeightChange: () => void): ViewHost {
         } else {
           speakProgress(true);
         }
-        if (!playing && !synthQueue.length) void Bridge.face("happy", 3);
+        if (!playing && !synthQueue.length) setFace("happy", 3);
       } else {
-        void Bridge.face("happy", 3);
+        setFace("happy", 3);
       }
       streamText = "";
     } catch (err) {
       runStatus = "";
       hideApproval(null);
-      void Bridge.face("concerned", 6);
+      setFace("concerned", 6);
       stripNow([{ text: String(err).replace(/^Error:\s*/, "").slice(0, 60), color: "#f4505e", size: 13 }]);
       State.stateOverride = null;
       State.noteMessage = String(err).replace(/^Error:\s*/, "");
