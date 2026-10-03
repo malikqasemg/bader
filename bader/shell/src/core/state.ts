@@ -133,6 +133,9 @@ class AppState {
 
   integrations: Record<string, IntegrationInfo> = {};
 
+  /** macOS: height of the menu bar. The window starts at the very top of the
+   *  screen, the island's content below the menu bar (clicks there go to macOS). */
+  topInset = 0;
   lastActivity = performance.now();
   /** The chat says the island must stay open (typing, waiting, talking, reading). */
   chatHold: () => boolean = () => false;

@@ -180,9 +180,17 @@ export function voiceSection(status: EngineStatus): HTMLElement {
   const stt = select(
     [
       ["local", "On this computer (free, private)"],
-      ["openai", "OpenAI Whisper (cloud, needs key)"],
+      ["openrouter", "OpenRouter (cloud, same key as the answers)"],
+      ["openai", "OpenAI Whisper (cloud, needs its own key)"],
     ],
-    status.values["stt.provider"] || "local",
+    status.values["bader.stt_cloud"] === "openrouter" ? "openrouter" : status.values["stt.provider"] || "local",
+  );
+  const speak = select(
+    [
+      ["edge", "Free online voice (Microsoft)"],
+      ["openrouter", "OpenRouter (cloud, same key as the answers)"],
+    ],
+    status.values["bader.tts_cloud"] === "openrouter" ? "openrouter" : "edge",
   );
   const size = select(
     [
@@ -218,7 +226,10 @@ export function voiceSection(status: EngineStatus): HTMLElement {
   apply.addEventListener("click", async () => {
     const values: Record<string, string> = {
       "stt.enabled": "true",
-      "stt.provider": stt.value,
+      // OpenRouter listening is Bader's own; the engine keeps its on-device one.
+      "stt.provider": stt.value === "openrouter" ? "local" : stt.value,
+      "bader.stt_cloud": stt.value === "openrouter" ? "openrouter" : "none",
+      "bader.tts_cloud": speak.value === "openrouter" ? "openrouter" : "none",
       // Empty = detect Arabic or English for each message.
       "stt.language": "",
       "tts.provider": "edge",
@@ -254,6 +265,7 @@ export function voiceSection(status: EngineStatus): HTMLElement {
     h("div", { class: "row" }, h("label", { text: "Listening" }), stt),
     sizeRow,
     keyRow,
+    h("div", { class: "row" }, h("label", { text: "Speaking" }), speak),
     h("div", { class: "row" }, h("label", { text: "Arabic voice" }), voiceAr),
     h("div", { class: "row" }, h("label", { text: "English voice" }), voice),
     h("div", { class: "row" }, h("label", { text: "Spoken replies" }), spoken),
@@ -405,9 +417,9 @@ export function setupSection(status: EngineStatus): HTMLElement | null {
   const second = select([...LANG, ["none", "None · لا شيء"]], status.values["bader.second_lang"] || "ar");
   const provider = select(
     [
+      ["openrouter", "OpenRouter — one key for answers and voice, any model"],
       ["openai", "OpenAI — one key for answers and voice"],
-      ["openrouter", "OpenRouter — any model"],
-      ["anthropic", "Anthropic (Claude)"],
+      ["anthropic", "Anthropic (Claude) — answers only"],
     ],
     status.values["model.provider"] || "openrouter",
   );
@@ -416,9 +428,9 @@ export function setupSection(status: EngineStatus): HTMLElement | null {
   const voice = select(
     [
       ["local", "On this computer + free online voice (no key)"],
-      ["cloud", "Cloud voice (OpenAI key)"],
+      ["cloud", "Cloud voice (uses your OpenRouter or OpenAI key)"],
     ],
-    status.values["stt.provider"] === "openai" ? "cloud" : "local",
+    status.values["stt.provider"] === "openai" || status.values["bader.stt_cloud"] === "openrouter" ? "cloud" : "local",
   );
   const voiceKey = h("input", { type: "password", autocomplete: "off", spellcheck: "false", placeholder: "OpenAI key for voice (sk-...)", style: "flex:1 1 auto;min-width:0" }) as HTMLInputElement;
   const voiceKeyRow = h("div", { class: "row" }, h("label", { text: "Voice key" }), voiceKey);
@@ -430,7 +442,7 @@ export function setupSection(status: EngineStatus): HTMLElement | null {
     key.placeholder = has ? "••••••••••••  (already saved)" : p.keyHint;
     model.placeholder = p.modelHint;
     // With an OpenAI key for answers, the same key does the voice.
-    voiceKeyRow.style.display = voice.value === "cloud" && provider.value !== "openai" ? "" : "none";
+    voiceKeyRow.style.display = voice.value === "cloud" && provider.value === "anthropic" ? "" : "none";
     if (second.value === primary.value) second.value = primary.value === "en" ? "ar" : "en";
   };
   provider.addEventListener("change", () => {
@@ -451,8 +463,11 @@ export function setupSection(status: EngineStatus): HTMLElement | null {
       if (!hasKey) return notice(feedback, false, "Paste the API key first.");
       if (!model.value.trim()) return notice(feedback, false, "Type the model name.");
       const cloud = voice.value === "cloud";
+      // OpenRouter: the same key does the voice. OpenAI / Anthropic: an OpenAI key does.
+      const viaRouter = cloud && provider.value === "openrouter";
+      const viaOpenAi = cloud && !viaRouter;
       const vKey = provider.value === "openai" ? key.value.trim() : voiceKey.value.trim();
-      if (cloud && !vKey && !(status.keys["VOICE_TOOLS_OPENAI_KEY"] ?? false) && !(provider.value === "openai" && (status.keys[p.envKey] ?? false))) {
+      if (viaOpenAi && !vKey && !(status.keys["VOICE_TOOLS_OPENAI_KEY"] ?? false) && !(provider.value === "openai" && (status.keys[p.envKey] ?? false))) {
         return notice(feedback, false, "Cloud voice needs an OpenAI key.");
       }
       Object.assign(values, {
@@ -464,12 +479,14 @@ export function setupSection(status: EngineStatus): HTMLElement | null {
         "model.base_url": p.baseUrl,
         "model.default": model.value.trim(),
         "stt.enabled": "true",
-        "stt.provider": cloud ? "openai" : "local",
-        "tts.provider": cloud ? "openai" : "edge",
+        "stt.provider": viaOpenAi ? "openai" : "local",
+        "tts.provider": viaOpenAi ? "openai" : "edge",
+        "bader.stt_cloud": viaRouter ? "openrouter" : "none",
+        "bader.tts_cloud": viaRouter ? "openrouter" : "none",
         "voice.auto_tts": "true",
       });
       if (key.value.trim()) secrets[p.envKey] = key.value.trim();
-      if (cloud && vKey) secrets["VOICE_TOOLS_OPENAI_KEY"] = vKey;
+      if (viaOpenAi && vKey) secrets["VOICE_TOOLS_OPENAI_KEY"] = vKey;
     }
     notice(feedback, true, "Saving…");
     try {
@@ -491,11 +508,11 @@ export function setupSection(status: EngineStatus): HTMLElement | null {
     h("span", { class: "hint", text: "1 · Languages. Bader listens and answers in these." }),
     h("div", { class: "row" }, h("label", { text: "Main language" }), primary),
     h("div", { class: "row" }, h("label", { text: "Second language" }), second),
-    h("span", { class: "hint", text: "2 · The AI service that answers. An OpenAI key can do the voice too." }),
+    h("span", { class: "hint", text: "2 · The AI service that answers. An OpenRouter or OpenAI key can do the voice too." }),
     h("div", { class: "row" }, h("label", { text: "AI service" }), provider),
     h("div", { class: "row" }, h("label", { text: "API key" }), key),
     h("div", { class: "row" }, h("label", { text: "Model" }), model),
-    h("span", { class: "hint", text: "3 · Voice. On this computer: nothing you say leaves it; replies use a free online voice. Cloud: your speech and replies go through OpenAI." }),
+    h("span", { class: "hint", text: "3 · Voice. On this computer: nothing you say leaves it; replies use a free online voice. Cloud: your speech and replies go through your AI service." }),
     h("div", { class: "row" }, h("label", { text: "Voice" }), voice),
     voiceKeyRow,
     h("div", { class: "row" }, done, skip),

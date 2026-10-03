@@ -104,6 +104,8 @@ export const Bridge = {
   focusWindow: (focused: boolean) => call<void>("focus_window", { focused }),
 
   reposition: () => call<void>("reposition"),
+  /** macOS: menu-bar height in logical pixels (0 elsewhere). */
+  topInset: () => call<number>("top_inset"),
 
   openUrl: (url: string) => call<void>("open_url", { url }),
 

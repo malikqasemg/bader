@@ -29,6 +29,7 @@
         "alwaysOnTop": true,
         "skipTaskbar": true,
         "focus": false,
+        "acceptFirstMouse": true,
         "visible": true,
         "center": false,
         "maximizable": false,

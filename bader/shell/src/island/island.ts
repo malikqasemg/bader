@@ -493,7 +493,8 @@ export class Island {
     const p = this.pushedRect;
     if (Math.abs(p.x - rect.x) > 0.5 || Math.abs(p.w - rect.w) > 0.5 || Math.abs(p.h - rect.h) > 0.5) {
       this.pushedRect = rect;
-      void Bridge.setIslandRect(rect.x, rect.y, rect.w, rect.h);
+      // In window coordinates the island also covers the menu-bar strip above it.
+      void Bridge.setIslandRect(rect.x, rect.y, rect.w, rect.h + State.topInset);
     }
   }
 
@@ -518,11 +519,13 @@ export class Island {
         this.collapseTimer = null;
         if (State.mode !== "hidden") return;
         this.collapsed = true;
+        document.documentElement.classList.add("win-collapsed");
         void Bridge.setCollapsed(true);
       }, 420);
     } else if (this.collapsed) {
       // Grow the window back before the island animates open.
       this.collapsed = false;
+      document.documentElement.classList.remove("win-collapsed");
       void Bridge.setCollapsed(false);
     }
   }

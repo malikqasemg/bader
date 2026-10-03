@@ -76,6 +76,94 @@ def serve():
 
 _STT = {"name": None, "model": None}
 
+OPENROUTER = "https://openrouter.ai/api/v1"
+OR_STT_MODEL = "openai/whisper-large-v3"
+# Gemini TTS speaks Arabic and English in one voice; it only returns raw PCM (24 kHz mono).
+OR_TTS_MODEL = "google/gemini-3.8-flash-lite-tts"
+OR_TTS_VOICE = "Charon"
+
+
+def _prefs():
+    try:
+        with open(os.path.join(os.environ.get("HERMES_HOME", ""), "bader_prefs.json"), encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+def _env_key(name):
+    """A key from the engine profile's .env (the worker's own environment may not have it)."""
+    if os.environ.get(name):
+        return os.environ[name]
+    try:
+        with open(os.path.join(os.environ.get("HERMES_HOME", ""), ".env"), encoding="utf-8") as f:
+            for line in f:
+                k, _, v = line.partition("=")
+                if k.strip() == name and v.strip():
+                    return v.strip().strip('"')
+    except OSError:
+        pass
+    return ""
+
+
+def _openrouter(path, body, timeout=60):
+    import urllib.request
+
+    key = _env_key("OPENROUTER_API_KEY")
+    if not key:
+        raise RuntimeError("no OpenRouter key")
+    req = urllib.request.Request(
+        OPENROUTER + path, data=json.dumps(body).encode(),
+        headers={"Authorization": "Bearer " + key, "Content-Type": "application/json"},
+    )
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        return r.read()
+
+
+def _openrouter_stt(path):
+    """Cloud speech-to-text with the OpenRouter key (same one that answers)."""
+    import base64
+
+    with open(path, "rb") as f:
+        audio = base64.b64encode(f.read()).decode()
+    fmt = os.path.splitext(path)[1].lstrip(".").lower() or "wav"
+    allowed = _languages()
+
+    def ask(language=None):
+        body = {"model": _prefs().get("or_stt_model") or OR_STT_MODEL, "input_audio": {"data": audio, "format": fmt}, "response_format": "verbose_json"}
+        if language:
+            body["language"] = language
+        return json.loads(_openrouter("/audio/transcriptions", body))
+
+    out = ask(allowed[0] if len(allowed) == 1 else None)
+    names = {"arabic": "ar", "english": "en"}
+    language = names.get(str(out.get("language") or "").lower(), str(out.get("language") or "").lower())
+    if len(allowed) > 1 and language and language not in allowed:
+        # Heard as some other language: ask again in the main language.
+        out = ask(allowed[0])
+        language = allowed[0]
+    return (out.get("text") or "").strip(), language or allowed[0]
+
+
+def _openrouter_tts(text, out_path):
+    """Cloud voice with the OpenRouter key. Returns the audio file (a .wav next to out_path)."""
+    import wave
+
+    prefs = _prefs()
+    pcm = _openrouter("/audio/speech", {
+        "model": prefs.get("or_tts_model") or OR_TTS_MODEL,
+        "input": text,
+        "voice": prefs.get("or_voice") or OR_TTS_VOICE,
+        "response_format": "pcm",
+    })
+    wav = os.path.splitext(out_path)[0] + ".wav"
+    with wave.open(wav, "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(24000)
+        w.writeframes(pcm)
+    return wav
+
 
 def _stt_config():
     """(provider, model name) from the engine profile's Voice settings."""
@@ -132,6 +220,14 @@ def _local_stt(path, name):
 def stt(path):
     provider, name = _stt_config()
     text, language, error = "", "", None
+    if _prefs().get("stt_cloud") == "openrouter":
+        try:
+            text, language = _openrouter_stt(path)
+            _emit({"ok": bool(text), "text": text, "language": language,
+                   "error": None if text else "Nothing was heard."})
+            return
+        except Exception as exc:  # offline, no credit…: listen on this computer instead
+            print("openrouter stt failed:", exc, file=sys.stderr)
     if provider == "local":
         try:
             text, language = _local_stt(path, name)
@@ -226,6 +322,14 @@ def tts(text_path, out_path):
         text = prepare_spoken_text(text, max_chars=None)
     except Exception:
         text = text.strip()
+    if _prefs().get("tts_cloud") == "openrouter":
+        try:
+            wav = _openrouter_tts(text, out_path)
+            if os.path.getsize(wav) > 1000:
+                _emit({"ok": True, "file": wav, "error": None})
+                return
+        except Exception as exc:  # fall back to the free online voice
+            print("openrouter tts failed:", exc, file=sys.stderr)
     provider = "edge"
     try:
         from tools.tts_tool import _load_tts_config

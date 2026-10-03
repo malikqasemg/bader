@@ -29,7 +29,12 @@ async function main() {
   island.applySettings();
   State.loadIntegrationTasks();
 
-  await onEvent<{ x: number; y: number }>("cursor", ({ x, y }) => island.onCursor(x, y));
+  const applyInset = async () => {
+    State.topInset = (await Bridge.topInset()) ?? 0;
+    document.documentElement.style.setProperty("--menu-inset", `${State.topInset}px`);
+  };
+  await applyInset();
+  await onEvent<{ x: number; y: number }>("cursor", ({ x, y }) => island.onCursor(x, y - State.topInset));
 
   /** Pause has to reach Rust too, or the pollers keep calling out. */
   const setPaused = (on: boolean) => {
@@ -56,7 +61,10 @@ async function main() {
     }
   });
 
-  await onEvent<null>("screen-changed", () => void Bridge.reposition());
+  await onEvent<null>("screen-changed", () => {
+    void applyInset();
+    void Bridge.reposition();
+  });
 
   // The settings window writes preferences; apply them here without a restart.
   await onEvent<Settings>("settings-changed", (s) => {

@@ -238,7 +238,11 @@ pub fn apply_geometry(app: &AppHandle, pref: &str, collapsed: bool) {
     let mp = *m.position();
     let ms = *m.size();
 
-    let (lw, lh) = if collapsed { (STRIP_W, STRIP_H) } else { (PANEL_W, PANEL_H) };
+    // macOS: the open window starts at the very top of the screen and is taller by
+    // the menu bar; the closed wake strip sits just under the menu bar.
+    let inset = menu_inset(&m);
+    let (lw, lh) = if collapsed { (STRIP_W, STRIP_H) } else { (PANEL_W, PANEL_H + inset) };
+    let drop = if collapsed { inset } else { 0.0 };
     let pw = (lw * scale).round().max(1.0) as u32;
     let ph = (lh * scale).round().max(1.0) as u32;
     let x = mp.x + (ms.width as i32 - pw as i32) / 2;
@@ -249,7 +253,23 @@ pub fn apply_geometry(app: &AppHandle, pref: &str, collapsed: bool) {
     // Moving across displays can rescale the window: re-assert the physical size.
     let _ = win.set_size(PhysicalSize::new(pw, ph));
     let _ = win.set_always_on_top(true);
-    pin_to_top(&win, lw, lh);
+    pin_to_top(&win, lw, lh, drop);
+}
+
+/// Height of the menu bar on this monitor, in logical pixels (macOS; 0 elsewhere).
+#[cfg(target_os = "macos")]
+pub fn menu_inset(m: &tauri::Monitor) -> f64 {
+    ((m.work_area().position.y - m.position().y) as f64 / m.scale_factor()).clamp(0.0, 80.0)
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn menu_inset(_m: &tauri::Monitor) -> f64 {
+    0.0
+}
+
+/// The same, for the monitor the island lives on.
+pub fn top_inset(app: &AppHandle, pref: &str) -> f64 {
+    target_monitor(app, pref).map(|m| menu_inset(&m)).unwrap_or(0.0)
 }
 
 /// AppKit pushes any window that reaches over the menu bar back under it
@@ -281,8 +301,8 @@ fn allow_over_menu_bar(ns: &objc2_app_kit::NSWindow) {
 /// The window toolkit applies its own size / position a moment later, so the
 /// frame is set natively now and again shortly after.
 #[cfg(target_os = "macos")]
-fn pin_to_top(win: &WebviewWindow, w: f64, h: f64) {
-    fn pin(win: &WebviewWindow, w: f64, h: f64) {
+fn pin_to_top(win: &WebviewWindow, w: f64, h: f64, drop: f64) {
+    fn pin(win: &WebviewWindow, w: f64, h: f64, drop: f64) {
         let target = win.clone();
         let _ = win.run_on_main_thread(move || {
             use objc2_app_kit::NSWindow;
@@ -299,7 +319,7 @@ fn pin_to_top(win: &WebviewWindow, w: f64, h: f64) {
             f.size.height = h;
             // Centred, top edge on the top edge of the screen (AppKit's y grows upwards).
             f.origin.x = sf.origin.x + ((sf.size.width - w) / 2.0).round();
-            f.origin.y = sf.origin.y + sf.size.height - h;
+            f.origin.y = sf.origin.y + sf.size.height - h - drop;
             ns.setFrame_display(f, true);
             let got = ns.frame();
             if (got.origin.y - f.origin.y).abs() > 0.5 {
@@ -313,7 +333,7 @@ fn pin_to_top(win: &WebviewWindow, w: f64, h: f64) {
     // Only the newest placement may re-apply itself (open → close in quick succession).
     static GEN: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     let mine = GEN.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1;
-    pin(win, w, h);
+    pin(win, w, h, drop);
     let later = win.clone();
     tauri::async_runtime::spawn(async move {
         for ms in [40u64, 160, 400] {
@@ -321,13 +341,13 @@ fn pin_to_top(win: &WebviewWindow, w: f64, h: f64) {
             if GEN.load(std::sync::atomic::Ordering::SeqCst) != mine {
                 return;
             }
-            pin(&later, w, h);
+            pin(&later, w, h, drop);
         }
     });
 }
 
 #[cfg(not(target_os = "macos"))]
-fn pin_to_top(_win: &WebviewWindow, _w: f64, _h: f64) {}
+fn pin_to_top(_win: &WebviewWindow, _w: f64, _h: f64, _drop: f64) {}
 
 #[cfg(windows)]
 fn hwnd_of(win: &WebviewWindow) -> Option<HWND> {

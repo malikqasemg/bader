@@ -42,6 +42,7 @@ pub fn create(app: &AppHandle, browser_args: &str) {
         .skip_taskbar(true)
         .always_on_top(true)
         .focused(false)
+        .accept_first_mouse(true)
         .visible(false)
         .build()
     {

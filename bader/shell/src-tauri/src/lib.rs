@@ -131,6 +131,13 @@ fn focus_window(app: AppHandle, focused: bool) {
     }
 }
 
+/// macOS: menu-bar height, so the island's content starts below it.
+#[tauri::command]
+fn top_inset(app: AppHandle, shared: State<Shared>) -> f64 {
+    let pref = shared.settings.lock().unwrap().screen.clone();
+    island::top_inset(&app, &pref)
+}
+
 #[tauri::command]
 fn reposition(app: AppHandle, shared: State<Shared>) {
     let pref = shared.settings.lock().unwrap().screen.clone();
@@ -647,6 +654,7 @@ pub fn run() {
             set_island_rect,
             focus_window,
             reposition,
+            top_inset,
             open_url,
             open_in_vscode,
             quit_app,

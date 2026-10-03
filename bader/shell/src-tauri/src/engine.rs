@@ -47,6 +47,9 @@ const VOICE_KEYS: &[&str] = &[
     "bader.second_lang",
     "bader.setup_done",
     "bader.buddy",
+    // Cloud voice through the OpenRouter key: "openrouter" or "none".
+    "bader.stt_cloud",
+    "bader.tts_cloud",
 ];
 
 /// .env keys the settings window may write.
@@ -227,6 +230,9 @@ pub async fn status() -> EngineStatus {
                 "bader.second_lang".into(),
                 prefs.get("second_lang").and_then(Value::as_str).unwrap_or("ar").to_string(),
             );
+            for (k, j) in [("bader.stt_cloud", "stt_cloud"), ("bader.tts_cloud", "tts_cloud")] {
+                v.insert(k.to_string(), prefs.get(j).and_then(Value::as_str).unwrap_or("none").to_string());
+            }
             // The character on the desktop: always | events | off.
             v.insert(
                 "bader.buddy".into(),
@@ -270,6 +276,9 @@ pub fn apply(mut values: HashMap<String, String>, secrets: HashMap<String, Strin
     let second = values.remove("bader.second_lang").filter(|v| ["en", "ar", "none"].contains(&v.as_str()));
     let setup_done = values.remove("bader.setup_done");
     let buddy = values.remove("bader.buddy").filter(|v| ["always", "events", "off"].contains(&v.as_str()));
+    let cloud = |v: &String| ["openrouter", "none"].contains(&v.as_str());
+    let stt_cloud = values.remove("bader.stt_cloud").filter(cloud);
+    let tts_cloud = values.remove("bader.tts_cloud").filter(cloud);
     if quick_lane.is_some()
         || quick_model.is_some()
         || screen_reply.is_some()
@@ -277,6 +286,8 @@ pub fn apply(mut values: HashMap<String, String>, secrets: HashMap<String, Strin
         || second.is_some()
         || setup_done.is_some()
         || buddy.is_some()
+        || stt_cloud.is_some()
+        || tts_cloud.is_some()
     {
         let path = dir.join("bader_prefs.json");
         let mut cur: Value = std::fs::read_to_string(&path)
@@ -297,6 +308,12 @@ pub fn apply(mut values: HashMap<String, String>, secrets: HashMap<String, Strin
         }
         if let Some(l) = second {
             cur["second_lang"] = Value::String(l);
+        }
+        if let Some(c) = stt_cloud {
+            cur["stt_cloud"] = Value::String(c);
+        }
+        if let Some(c) = tts_cloud {
+            cur["tts_cloud"] = Value::String(c);
         }
         if let Some(b) = buddy {
             cur["buddy"] = Value::String(b);

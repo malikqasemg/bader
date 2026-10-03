@@ -47,15 +47,26 @@ body {
   cursor: default;
 }
 
+/* macOS: the window starts at the very top of the screen, but the menu bar takes
+   every click in its own strip — so the content starts below it, and the island
+   grows a black "neck" up to the screen edge (see #island::before). */
+:root {
+  --top-inset: var(--menu-inset, 0px);
+}
+:root.win-collapsed {
+  --top-inset: 0px; /* the wake strip window sits under the menu bar by itself */
+}
+
 #root {
   position: fixed;
   inset: 0;
+  top: var(--top-inset);
 }
 
 /* Invisible strip that wakes the island when it is hidden. */
 #wake-strip {
   position: fixed;
-  top: 0;
+  top: var(--top-inset);
   left: 50%;
   transform: translateX(-50%);
   width: 240px;
@@ -73,6 +84,16 @@ body {
   border-radius: 0 0 14px 14px;
   overflow: visible;
   will-change: width, height, transform;
+}
+
+#island::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 100%;
+  height: var(--top-inset);
+  background: #000;
 }
 
 #island-clip {
