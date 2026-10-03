@@ -352,12 +352,17 @@ def main():
     poll = select.poll()
     poll.register(sys.stdin, select.POLLIN)
     line = bytearray()
+    t_boot = time.ticks_ms()
 
     def poll_serial(wait=0):
         nonlocal line
         while poll.poll(wait):
             wait = 0
             ch = stdin.read(1)
+            # Set-up tools (mpremote) break in with Ctrl-C right after a reset.
+            if ch == b"\x03" and not line and time.ticks_diff(time.ticks_ms(), t_boot) < 10_000:
+                micropython.kbd_intr(3)
+                raise KeyboardInterrupt
             if ch in (b"\n", b"\r"):
                 if line:
                     text_line = line.decode()
@@ -378,8 +383,7 @@ def main():
     d.backlight(0.9)
     set_led((0, 0, 0))
     # Pictures are binary, so Ctrl-C must be plain data while the app talks to
-    # us. Tools (mpremote) can still break in during this first second, or send EXIT.
-    time.sleep_ms(1200)
+    # us (poll_serial lets set-up tools in during the first seconds; or send EXIT).
     micropython.kbd_intr(-1)
     if not cfg.get("cal"):
         calibrate(poll_serial)
