@@ -11,7 +11,6 @@ use std::sync::Mutex;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
-use crate::secrets;
 
 /// Engine endpoint; override with BADER_ENGINE_URL (e.g. a server install).
 const DEFAULT_ENGINE_URL: &str = "http://127.0.0.1:8642/v1";
@@ -77,7 +76,7 @@ pub async fn send(
     query: String,
     context: Option<ChatContext>,
 ) -> Result<ChatReply, String> {
-    let key = secrets::get("bader-engine-key").unwrap_or_default();
+    let key = crate::engine::api_key();
 
     // Everything except a screenshot goes through the live runs stream (tool
     // progress, approvals, fast snapshot answers). Screenshots need image input.

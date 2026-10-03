@@ -531,3 +531,18 @@ pub fn pref_set(key: &str, value: Value) {
     cur[key] = value;
     let _ = std::fs::write(&path, serde_json::to_string_pretty(&cur).unwrap_or_default());
 }
+
+/// The key Bader's window uses to talk to the engine: the one typed in Settings,
+/// or — for an engine on this computer — the engine's own API_SERVER_KEY, so a
+/// local set-up works without copying a key by hand.
+pub fn api_key() -> String {
+    if let Some(k) = crate::secrets::get("bader-engine-key") {
+        return k;
+    }
+    let env = std::fs::read_to_string(home().join(".env")).unwrap_or_default();
+    env.lines()
+        .filter_map(|l| l.split_once('='))
+        .find(|(k, v)| k.trim() == "API_SERVER_KEY" && !v.trim().is_empty())
+        .map(|(_, v)| v.trim().trim_matches('"').to_string())
+        .unwrap_or_default()
+}

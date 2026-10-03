@@ -289,7 +289,7 @@ fn on_button(app: &AppHandle, kind: &str) {
         let choice = if kind == "long" { "deny" } else { "once" };
         let app2 = app.clone();
         tauri::async_runtime::spawn(async move {
-            let key = crate::secrets::get("bader-engine-key").unwrap_or_default();
+            let key = crate::engine::api_key();
             let _ = crate::runs::answer(&app2, &crate::claude::engine_url(), &key, choice).await;
         });
         return;

@@ -368,7 +368,7 @@ fn face_led(face: State<face::Face>, r: u8, g: u8, b: u8, pulse: bool) {
 /// Approve ("once") or deny ("deny") what Bader is waiting on.
 #[tauri::command]
 async fn run_approve(app: AppHandle, choice: String) -> Result<bool, String> {
-    let key = secrets::get("bader-engine-key").unwrap_or_default();
+    let key = crate::engine::api_key();
     runs::answer(&app, &claude::engine_url(), &key, &choice).await
 }
 
