@@ -62,3 +62,14 @@ refresh token, account. The phone keeps it in the Keychain (this device only).
 Same line protocol on USB serial and on Bluetooth LE (Nordic UART service, device name `Bader`).
 New lines: board → app `AWAY`, reply `ERR away` to the side that does not own the screen.
 The board owns x 36..84 of the top bar (its PC / PHONE button).
+
+## F. Files on the computer as built (`~/.hermes/profiles/bader/`)
+| File | Holds |
+|---|---|
+| `config.yaml`, `.env` | engine settings and keys (never in the repo) |
+| `bader_prefs.json` | languages, voice choices, screen reply mode, character mode and spot |
+| `bader_inbox.json` | snapshot: last 7 days of mail, calendar 3 days back to 7 ahead, recent history |
+| `bader_journal.jsonl` | every ask/answer from the window |
+| `bader_shared.jsonl` | mirror of the shared memory file in Drive |
+| `google_token.json` | Google sign-in |
+| `~/Library/Application Support/Bader/secrets.json` (Mac) | app secrets, readable only by the user |

@@ -50,3 +50,11 @@ Tray: Bader icon, status dot (green = running, amber = needs sign-in, red = lice
 ## Display driven by the phone
 - Same layout as from the computer: bar, face, one status line, buttons (Talk, Brief, Mail, Meet).
 - After an answer: text pages with More / Home. Approval: Yes ✓ / No ✕. A pressed button turns amber.
+
+## Computer app as built (2026-10-03)
+- Window pinned to the very top of the screen, content below the menu bar; tabs Home / Chat, gear, ✕ to hide.
+- Bader character on the desktop: drag to move (spot remembered), double-click opens chat, right-click gives
+  Talk, Brief, Mail, Meetings, Show/hide window, Hide Bader, Quit. Mode: always / on events / off.
+- Menu-bar menu: Open Bader, Show/hide window, ✓ Show Bader on the desktop, Settings, Pause, Quit.
+- Display buttons: choice "Text only" or "Text + Voice" per press, or a default set in Settings.
+- Rule: the user never sees engine, tool or file names.

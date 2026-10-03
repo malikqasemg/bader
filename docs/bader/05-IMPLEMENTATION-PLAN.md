@@ -12,7 +12,7 @@ Durations are estimates.
 - [x] CI: `.github/workflows/bader-shell-windows.yml` builds `Bader-Windows-<v>-setup.exe` (2.1 MB)
 - [ ] Bundle Hermes engine headless inside the installer (runs as background process)
 - [ ] CLI/command name `bader` alongside `hermes` (keep `hermes` internally for upstream merges)
-- [ ] `SOUL.md` → Bader persona, Arabic + English
+- [x] `SOUL.md` → Bader persona, Arabic + English
 - [ ] Arabic strings: review `locales/ar.yaml`, add Bader-specific keys
 - [x] Build Windows installer from `bader/shell` (Tauri NSIS setup.exe) — v0.1.0
 - [x] macOS build of the shell (DMG) for testing
@@ -35,7 +35,8 @@ Durations are estimates.
 - [ ] "New message" (surprised) when background mail sync finds important mail
 
 ## Phase 3b — Screen buddy (ideas from Clicky, MIT: farzaa/clicky, openclicky, clicky_windows)
-- [ ] Push-to-talk hotkey (no need to open the island)
+- [x] Push-to-talk hotkey: Control+Option (Mac) / Ctrl+Alt (Windows)
+- [x] Character on the desktop: drag, double-click, right-click quick actions
 - [ ] Point at things: cursor overlay flies to the button Bader talks about
 - [ ] Proactive suggestions: notice repeated work and offer to do it (ask first)
 - [ ] Look on Windows (screen capture)
@@ -48,10 +49,25 @@ Durations are estimates.
 - [x] iPhone app `bader/ios` (SwiftUI, xcodegen): chat, voice, camera, mail, calendar, news, weather, approvals, memory.
 - [x] Display firmware 3.1: Bluetooth + PC / PHONE button; computer side understands AWAY.
 - [x] Phone draws the display over Bluetooth (`FaceLink`, `FaceScreen`).
-- [ ] Test on the real iPhone (needs Developer Mode on the phone).
+- [x] Installed on the test iPhone (free Apple team: expires after 7 days); natural cloud voice added.
+- [ ] Real-use test on the iPhone: voice quality, brief, approvals, display over Bluetooth.
 - [ ] Display on Bluetooth from the computer (no cable) — not built.
 - [ ] Morning brief notification on the phone; Outlook on the phone; App Store / TestFlight (needs paid Apple developer account).
 
+## Phase 3f — done between 2026-10-01 and 2026-10-03
+- [x] Touch display 2.8" (ESP32-32E): faces, status, buttons, lists, answer pages, upright/sideways, calibration
+- [x] Telegram channel; engine names hidden from the user
+- [x] Memory of earlier asks (history in the snapshot + journal + recall skill)
+- [x] News (Google News feed), weather (Open-Meteo), 7-day mail window
+- [x] OpenRouter key does voice too; speech model `large-v3-turbo`, Arabic/English only
+- [x] No keychain prompts on Mac (file store); first-run wizard
+
+## Next up (in this order)
+1. Real-use test of the iPhone app and the display's PC / PHONE switch; fix what the test finds.
+2. All-in-one installer for Mac and Windows (size tier still to pick: about 0.8 / 1.05 / 2 GB download).
+3. Confirm the Windows build of recent work (character, hotkey, display, secrets, pairing).
+4. Portable display: board with mic, speaker, camera, battery (ESP32-S3 class), talking to the phone.
+5. Outlook + Webex connectors; licence client and server; code signing.
 ## Phase 2 — Licence (week 2)
 - [ ] Licence server: add `product` column + `/bader/*` endpoints to iNetBuzz `mcp-server`
 - [ ] `bader/license/` client: activate, refresh every 24 h, status, usage

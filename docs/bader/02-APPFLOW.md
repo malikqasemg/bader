@@ -51,3 +51,14 @@
 1. The display's top bar shows PC or PHONE (drawn by the display itself).
 2. Tap it: the old owner is told AWAY, the new owner READY, and the new owner redraws everything.
 3. A side that was never heard from since power-on gives the screen to the first side that says hello.
+
+## Flow 9 — Ask at the computer (as built, 2026-10-03)
+1. Hold Control+Option (Ctrl+Alt on Windows) and talk, or type in the window, or tap a button on the display.
+2. Speech → text. Simple asks go to the quick lane (one model call); mail, calendar, news, search go to the engine.
+3. The answer streams in, is spoken sentence by sentence, and a notification appears if the window is hidden.
+4. The ask and the answer are written to the journal and to shared memory.
+
+## Flow 10 — First run on the computer
+1. Settings opens by itself until set-up is finished.
+2. Pick main and second language (Arabic / English), paste the AI key (OpenRouter first), pick voice: on device or cloud.
+3. Connect Google (browser sign-in). Optional: Telegram bot token + user ID.

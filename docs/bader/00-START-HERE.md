@@ -9,6 +9,7 @@ It is a rebranded fork of Hermes Agent (Nous Research, MIT).
 3. `03-UIUX-BRIEF.md` — look, language, chat behaviour
 4. `04-BACKEND-SCHEMA.md` — licence server + local data
 5. `05-IMPLEMENTATION-PLAN.md` — phases and tasks
+6. `06-HANDOFF.md` — where work stopped and how to continue
 
 ## Repo facts
 - Repo: https://github.com/malikqasemg/bader (fork of NousResearch/hermes-agent)
