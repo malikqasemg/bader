@@ -186,6 +186,7 @@ export function buildPrompt(onHeightChange: () => void): ViewHost {
     synthQueue.length = 0;
     player?.pause();
     player = null;
+    void Bridge.audioStop();
     playing = false;
   }
 
@@ -196,7 +197,12 @@ export function buildPrompt(onHeightChange: () => void): ViewHost {
       player.onended = () => resolve();
       player.onpause = () => resolve();
       player.onerror = () => resolve();
-      void player.play().catch(() => resolve());
+      void player.play().catch((err) => {
+        // The web view refused (no click in this window yet): play it natively.
+        void Bridge.log(`voice: web playback refused (${String(err)}) — playing natively`);
+        if (gen !== speechGen) return resolve();
+        void Bridge.audioPlay(url).catch(() => {}).finally(() => resolve());
+      });
     });
   }
 
@@ -259,6 +265,7 @@ export function buildPrompt(onHeightChange: () => void): ViewHost {
     State.notify();
   });
 
+  let talkSilent = false; // touch screen set to "text only"
   async function toggleMic() {
     if (sending || listening) return;
     if (!recording) {
@@ -285,9 +292,11 @@ export function buildPrompt(onHeightChange: () => void): ViewHost {
       const heard = await Bridge.voiceStop();
       listening = false;
       setMic();
+      const silent = talkSilent;
+      talkSilent = false; // only the tap that started this recording
       if (heard.text) {
         input.value = heard.text;
-        await submit(true);
+        await submit(true, silent ? false : undefined);
       } else {
         // Nothing was said: back to idle instead of "thinking" forever.
         input.placeholder = "";
@@ -303,7 +312,10 @@ export function buildPrompt(onHeightChange: () => void): ViewHost {
       State.notify();
     }
   }
-  mic.addEventListener("click", () => void toggleMic());
+  mic.addEventListener("click", () => {
+    talkSilent = false;
+    void toggleMic();
+  });
 
   // ── Keep the island open while typing, waiting, talking or reading ──
   let readUntil = 0;
@@ -317,7 +329,10 @@ export function buildPrompt(onHeightChange: () => void): ViewHost {
   initFace({
     talk: () => {
       window.dispatchEvent(new Event("bader-open-chat"));
-      void toggleMic();
+      void Bridge.engineStatus().then((st) => {
+        talkSilent = st?.values["bader.screen_reply"] === "text";
+        void toggleMic();
+      });
     },
     cancelTalk: () => {
       if (!recording) return;
@@ -332,11 +347,15 @@ export function buildPrompt(onHeightChange: () => void): ViewHost {
       setFace("idle");
     },
     approve: (choice) => void Bridge.runApprove(choice).catch((err) => console.error("[bader] approval failed", err)),
-    ask: (query) => {
+    ask: (query, speak) => {
       if (sending || recording || listening) return;
       window.dispatchEvent(new Event("bader-open-chat"));
       input.value = query;
-      void submit(true);
+      void submit(false, speak);
+    },
+    replyMode: async () => {
+      const v = (await Bridge.engineStatus())?.values["bader.screen_reply"];
+      return v === "text" || v === "voice" ? v : "ask";
     },
     busy: () => sending || recording || listening,
   });
@@ -365,7 +384,8 @@ export function buildPrompt(onHeightChange: () => void): ViewHost {
     look.classList.toggle("look-on", looking);
   });
 
-  async function submit(byVoice = false) {
+  /** speak: true/false forces a spoken / silent reply (touch screen choice). */
+  async function submit(byVoice = false, speak?: boolean) {
     const query = input.value.trim();
     if (!query || sending) return;
     input.value = "";
@@ -374,7 +394,7 @@ export function buildPrompt(onHeightChange: () => void): ViewHost {
     streamText = "";
     spokenUpTo = 0;
     streaming = false;
-    speechOn = byVoice || speakReplies;
+    speechOn = speak ?? (byVoice || speakReplies);
     Sound.play("send");
 
     State.chatHistory.push({ id: nextId++, role: "user", content: query });

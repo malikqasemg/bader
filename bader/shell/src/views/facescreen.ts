@@ -25,7 +25,10 @@ export interface FaceActions {
   cancelTalk: () => void;
   stopSpeaking: () => void;
   approve: (choice: "once" | "deny") => void;
-  ask: (query: string) => void;
+  /** speak: true = text + voice, false = text only. */
+  ask: (query: string, speak: boolean) => void;
+  /** The setting: ask each time, text only, or text + voice. */
+  replyMode: () => Promise<"ask" | "text" | "voice">;
   busy: () => boolean;
 }
 
@@ -158,6 +161,9 @@ const ui = {
   sent: new Map<string, string>(),
   revert: 0,
   answerTimer: 0,
+  /** A request waiting for "Text" or "Text + voice". */
+  choice: null as string | null,
+  choiceTimer: 0,
 };
 let actions: FaceActions | null = null;
 
@@ -193,7 +199,9 @@ function drawBar() {
 function drawInfo() {
   if (ui.page !== "home") return;
   const label = LABELS[ui.mode];
-  const lines: StripLine[] = ui.mode === "idle" || !label
+  const lines: StripLine[] = ui.choice && ui.mode === "idle"
+    ? [{ text: "How do you want the answer?", color: INK, size: 16, bold: true }, { text: "كيف تريد الإجابة؟", color: AMBER, size: 16 }]
+    : ui.mode === "idle" || !label
     ? ui.idle
     : [{ text: `${label[0]} · ${label[1]}`, color: label[2], size: 19, bold: true }, ...ui.detail.slice(0, 1)];
   put("info", 0, INFO_Y, W, INFO_H, paint(W, INFO_H, (ctx) => {
@@ -213,6 +221,18 @@ function currentButtons(): Button[] {
   if (!a) return [];
   const talk: Button = { label: "Talk", sub: "تكلّم", color: CYAN, run: a.talk };
   const home: Button = { label: "Home", sub: "الرئيسية", color: GREY, run: () => setPage("home") };
+  if (ui.choice && ui.mode === "idle") {
+    const q = ui.choice;
+    const pick = (speak: boolean) => () => {
+      clearChoice();
+      a.ask(q, speak);
+    };
+    return [
+      { label: "Text", sub: "نص فقط", color: INK, run: pick(false) },
+      { label: "Text + voice", sub: "نص وصوت", color: CYAN, run: pick(true) },
+      { label: "✕", color: RED, run: () => { clearChoice(); drawInfo(); drawButtons(); } },
+    ];
+  }
   if (ui.mode === "approval") {
     return [
       { label: "Approve", sub: "موافق", color: GREEN, run: () => a.approve("once") },
@@ -239,10 +259,37 @@ function currentButtons(): Button[] {
   if (ui.page !== "home") return [home, talk];
   return [
     talk,
-    { label: "Brief", sub: "موجز", color: AMBER, run: () => a.ask(BRIEF) },
+    { label: "Brief", sub: "موجز", color: AMBER, run: () => request(BRIEF) },
     { label: "Mail", sub: "البريد", color: INK, run: () => setPage("inbox") },
     { label: "Day", sub: "اليوم", color: INK, run: () => setPage("agenda") },
   ];
+}
+
+function clearChoice() {
+  ui.choice = null;
+  window.clearTimeout(ui.choiceTimer);
+}
+
+/** A screen button asked Bader something: answer as text, or text + voice? */
+function request(query: string) {
+  const a = actions;
+  if (!a || a.busy()) return;
+  void a.replyMode().then((mode) => {
+    if (mode !== "ask") {
+      a.ask(query, mode === "voice");
+      return;
+    }
+    ui.choice = query;
+    drawInfo();
+    drawButtons();
+    window.clearTimeout(ui.choiceTimer);
+    ui.choiceTimer = window.setTimeout(() => {
+      if (!ui.choice) return;
+      clearChoice();
+      drawInfo();
+      drawButtons();
+    }, 20_000);
+  });
 }
 
 const BRIEF =
@@ -457,10 +504,10 @@ function onTouch(x: number, y: number) {
     if (i < 0 || actions.busy()) return;
     if (ui.page === "inbox") {
       const m = ui.lists.mails[i];
-      if (m) actions.ask(`Summarise this email and tell me what I should do about it: from ${m.from}, subject "${m.subject}".`);
+      if (m) request(`Summarise this email and tell me what I should do about it: from ${m.from}, subject "${m.subject}".`);
     } else {
       const e = ui.lists.events[i];
-      if (e) actions.ask(`Brief me on my meeting "${e.title}" (${eventTime(e.start)}): what it is about and anything related in my recent email.`);
+      if (e) request(`Brief me on my meeting "${e.title}" (${eventTime(e.start)}): what it is about and anything related in my recent email.`);
     }
     return;
   }
@@ -531,6 +578,7 @@ export function setFace(name: FaceName, seconds?: number) {
     return;
   }
   window.clearTimeout(ui.revert);
+  if (name !== "idle") clearChoice();
   const changed = ui.mode !== name;
   ui.mode = name;
   if (changed) ui.detail = [];

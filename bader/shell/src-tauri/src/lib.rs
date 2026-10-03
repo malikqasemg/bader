@@ -353,6 +353,17 @@ fn voice_start(rec: State<voice::Recorder>) -> Result<(), String> {
     voice::start(&rec)
 }
 
+/// Plays a spoken reply outside the web view (used when the web view won't).
+#[tauri::command]
+async fn audio_play(data: String) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || voice::play(&data)).await.map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+fn audio_stop() {
+    voice::stop_playing();
+}
+
 #[tauri::command]
 fn voice_cancel(rec: State<voice::Recorder>) {
     voice::cancel(&rec);
@@ -620,6 +631,8 @@ pub fn run() {
             notify,
             voice_stop,
             voice_cancel,
+            audio_play,
+            audio_stop,
             voice_speak,
             capture_screen,
             accounts_status,

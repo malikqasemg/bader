@@ -274,6 +274,14 @@ export function languageSection(status: EngineStatus): HTMLElement {
   const summary = select(LANGS, status.values["bader.summary_lang"] || "auto");
   const approvals = h("input", { type: "checkbox" }) as HTMLInputElement;
   approvals.checked = (status.values["bader.approvals"] ?? "true") !== "false";
+  const screenReply = select(
+    [
+      ["ask", "Ask me each time · اسألني كل مرة"],
+      ["text", "Text only · نص فقط"],
+      ["voice", "Text + voice · نص وصوت"],
+    ],
+    status.values["bader.screen_reply"] || "ask",
+  );
   const feedback = h("div", {});
   const apply = h("button", { class: "primary", text: "Apply" }) as HTMLButtonElement;
   apply.addEventListener("click", async () => {
@@ -285,6 +293,7 @@ export function languageSection(status: EngineStatus): HTMLElement {
           "bader.answer_lang": answer.value,
           "bader.summary_lang": summary.value,
           "bader.approvals": approvals.checked ? "true" : "false",
+          "bader.screen_reply": screenReply.value,
         },
         {},
         true,
@@ -303,6 +312,8 @@ export function languageSection(status: EngineStatus): HTMLElement {
     h("span", { class: "hint", text: "Ask in Arabic, get the answer in English (or the other way round)." }),
     h("div", { class: "row" }, h("label", { text: "Answers" }), answer),
     h("div", { class: "row" }, h("label", { text: "Meeting summaries" }), summary),
+    h("div", { class: "row" }, h("label", { text: "Screen buttons answer" }), screenReply),
+    h("span", { class: "hint", text: "For Bader's touch screen: what happens when you tap Brief, an email or a meeting." }),
     h("div", { class: "row" }, h("label", { text: "Ask before sending" }), approvals),
     h("span", { class: "hint", text: "When on, Bader asks you before sending or deleting mail and changing your calendar." }),
     h("div", { class: "row" }, apply),

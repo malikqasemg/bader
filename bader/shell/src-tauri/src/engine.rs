@@ -41,6 +41,7 @@ const VOICE_KEYS: &[&str] = &[
     "bader.approvals",
     "bader.quick_lane",
     "bader.quick_model",
+    "bader.screen_reply",
 ];
 
 /// .env keys the settings window may write.
@@ -208,6 +209,11 @@ pub async fn status() -> EngineStatus {
                 "bader.quick_model".into(),
                 prefs.get("quick_model").and_then(Value::as_str).unwrap_or("").to_string(),
             );
+            // Touch screen buttons: "ask" each time, "text" only, or "voice" (text + voice).
+            v.insert(
+                "bader.screen_reply".into(),
+                prefs.get("screen_reply").and_then(Value::as_str).unwrap_or("ask").to_string(),
+            );
             v.insert(
                 "bader.approvals".into(),
                 (prefs.get("approvals").and_then(Value::as_bool) != Some(false)).to_string(),
@@ -237,7 +243,8 @@ pub fn apply(mut values: HashMap<String, String>, secrets: HashMap<String, Strin
     }
     let quick_lane = values.remove("bader.quick_lane");
     let quick_model = values.remove("bader.quick_model");
-    if quick_lane.is_some() || quick_model.is_some() {
+    let screen_reply = values.remove("bader.screen_reply").filter(|v| ["ask", "text", "voice"].contains(&v.as_str()));
+    if quick_lane.is_some() || quick_model.is_some() || screen_reply.is_some() {
         let path = dir.join("bader_prefs.json");
         let mut cur: Value = std::fs::read_to_string(&path)
             .ok()
@@ -248,6 +255,9 @@ pub fn apply(mut values: HashMap<String, String>, secrets: HashMap<String, Strin
         }
         if let Some(m) = quick_model {
             cur["quick_model"] = Value::String(m.trim().to_string());
+        }
+        if let Some(r) = screen_reply {
+            cur["screen_reply"] = Value::String(r);
         }
         std::fs::write(&path, serde_json::to_string_pretty(&cur).unwrap_or_default())
             .map_err(|e| format!("Could not save preferences: {e}"))?;

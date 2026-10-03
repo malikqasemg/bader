@@ -158,6 +158,9 @@ export const Bridge = {
   faceInfo: () => call<FaceInfo | null>("face_info"),
   faceCmd: (line: string) => call<void>("face_cmd", { line }),
   snapshotLists: () => call<SnapshotLists>("snapshot_lists"),
+  /** Plays a spoken reply natively; resolves when it ends or is stopped. */
+  audioPlay: (data: string) => callOrThrow<void>("audio_play", { data }),
+  audioStop: () => call<void>("audio_stop"),
   voiceCancel: () => call<void>("voice_cancel"),
 
   // ── Runs: approvals, snapshot ─────────────────────────────────────────────

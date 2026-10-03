@@ -444,3 +444,51 @@ pub fn capture_screen() -> Result<String, String> {
         Err("Looking at the screen is coming to Windows next.".into())
     }
 }
+
+// ── Native playback (fallback when the web view refuses to play a reply) ─────
+
+static PLAYER: Mutex<Option<std::process::Child>> = Mutex::new(None);
+
+/// Plays a `data:audio/...;base64,` clip and returns when it ends or is stopped.
+pub fn play(data_url: &str) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        use base64::Engine;
+        static SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let b64 = data_url.split_once(',').map(|(_, b)| b).ok_or("not an audio clip")?;
+        let bytes = base64::engine::general_purpose::STANDARD.decode(b64).map_err(|e| e.to_string())?;
+        let dir = crate::settings::local_dir().join("voice");
+        std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+        let ext = if data_url.starts_with("data:audio/wav") { "wav" } else { "mp3" };
+        let n = SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let path = dir.join(format!("play-{n}.{ext}"));
+        std::fs::write(&path, bytes).map_err(|e| e.to_string())?;
+        let child = Command::new("afplay").arg(&path).spawn().map_err(|e| e.to_string())?;
+        *PLAYER.lock().unwrap() = Some(child);
+        loop {
+            std::thread::sleep(std::time::Duration::from_millis(60));
+            let mut slot = PLAYER.lock().unwrap();
+            match slot.as_mut().map(|c| c.try_wait()) {
+                Some(Ok(None)) => continue,
+                _ => {
+                    *slot = None;
+                    break;
+                }
+            }
+        }
+        let _ = std::fs::remove_file(&path);
+        Ok(())
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = data_url;
+        Err("native playback is not available here".into())
+    }
+}
+
+pub fn stop_playing() {
+    if let Some(mut c) = PLAYER.lock().unwrap().take() {
+        let _ = c.kill();
+        let _ = c.wait();
+    }
+}
